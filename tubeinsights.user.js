@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         TubeInsights
 // @namespace    https://github.com/exyezed/tube-insights/
-// @version      1.0.0-beta.3
+// @version      1.0.0
 // @author       exyezed
-// @description  youtube metadata powered by InnerTube (youtubei)
+// @description  A powerful YouTube userscript powered by the InnerTube API — offering advanced analytics, live stats, organized bookmarks, and integrated video/audio downloads.
 // @license      MIT
 // @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4IiB2aWV3Qm94PSIwIDAgMjQgMjQiIGZpbGw9IiNmZjYyN2QiPjxwYXRoIHN0cm9rZT0ibm9uZSIgZD0iTTAgMGgyNHYyNEgweiIgZmlsbD0ibm9uZSIvPjxwYXRoIGQ9Ik0xOCAzYTUgNSAwIDAgMSA1IDV2OGE1IDUgMCAwIDEgLTUgNWgtMTJhNSA1IDAgMCAxIC01IC01di04YTUgNSAwIDAgMSA1IC01em0tOSA2djZhMSAxIDAgMCAwIDEuNTE0IC44NTdsNSAtM2ExIDEgMCAwIDAgMCAtMS43MTRsLTUgLTNhMSAxIDAgMCAwIC0xLjUxNCAuODU3eiIgLz48L3N2Zz4=
 // @supportURL   https://github.com/exyezed/tube-insights/issues
@@ -5061,7 +5061,7 @@ u("form", { method: "dialog", className: "modal-backdrop", children: u(
 u("div", { children: [
 u("h3", { className: "text-xl font-semibold mb-4", children: "About" }),
 u("div", { className: "bg-base-200 rounded-lg p-4 space-y-3 text-xl", children: [
-u("p", { className: "opacity-60", children: "youtube metadata powered by InnerTube (youtubei)" }),
+u("p", { className: "opacity-60", children: "A powerful YouTube userscript powered by the InnerTube API — offering advanced analytics, live stats, organized bookmarks, and integrated video/audio downloads." }),
 u("div", { className: "flex gap-4 pt-2", children: [
 u(
               "a",
@@ -5094,7 +5094,7 @@ u("span", { children: "GitHub" })
       ] })
     ] });
   }
-  const version = "1.0.0-beta.3";
+  const version = "1.0.0";
   const pkg = {
     version
   };
