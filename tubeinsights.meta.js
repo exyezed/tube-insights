@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TubeInsights
 // @namespace    https://github.com/exyezed/tube-insights/
-// @version      1.0.0-beta.2
+// @version      1.0.0-beta.3
 // @author       exyezed
 // @description  youtube metadata powered by InnerTube (youtubei)
 // @license      MIT
