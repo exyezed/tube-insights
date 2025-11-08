@@ -2,9 +2,6 @@
 
 A feature-rich and high-performance YouTube userscript, built on the InnerTube API — delivering advanced analytics, live stats, smart bookmarking, and seamless video/audio downloading without leaving YouTube.
 
-### For Mobile Users
-> Use a browser that supports extensions (Kiwi Browser, Lemur Browser, Kito Browser, or Mask Browser) for the extension installation, or use Violentmonkey as your userscript manager for the userscript installation.
-
 ## Features
 
 - **Insights:** Advanced analytics for channels & videos — monetization status, country (flag), full metadata, and automatic video count per tab.
