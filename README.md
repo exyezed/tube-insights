@@ -8,7 +8,7 @@ A feature-rich and high-performance YouTube userscript, built on the InnerTube A
 - **Live Count:** Real-time channel & video stats with instant updates.
 - **Bookmark:** Save & categorize favorite channels with JSON import/export, quick-access mini stats, and fast switching.
 - **DDL:** Download video (144p–4K) or audio (MP3 128–320kbps) with bulk mode, plus subtitles (SRT/TXT/RAW with auto-translate) — all without leaving YouTube.
-- **Settings:** 35 themes, adjustable panel layout & pagination, and video player utilities: loop, frame-accurate screenshot (copy/download as PNG, JPG, or WebP), and more.
+- **Settings:** 35 themes, adjustable panel layout & pagination, and video player utilities: loop, frame-accurate screenshot (copy/download as JPG, PNG, or WebP), and more.
 
 ## Screenshots
 
@@ -27,3 +27,7 @@ A feature-rich and high-performance YouTube userscript, built on the InnerTube A
 ### DDL
 
 ![image](https://github.com/user-attachments/assets/b4eb7641-76dd-4018-99e1-65461d245b9c)
+
+### Video Player Modules
+
+![image](https://github.com/user-attachments/assets/c1d2c365-a4e7-45dd-b8d8-98037eebca86)
