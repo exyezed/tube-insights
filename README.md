@@ -10,7 +10,7 @@ A feature-rich and high-performance YouTube userscript, built on the InnerTube A
 - **DDL:** Download video (144p–4K) or audio (MP3 128–320kbps) with bulk mode, plus subtitles (SRT/TXT/RAW with auto-translate) — all without leaving YouTube.
 - **Settings:** 35 themes, adjustable panel layout & pagination, and video player utilities: loop, frame-accurate screenshot (copy/download as PNG, JPG, or WebP), and more.
 
-## Screenshoots
+## Screenshots
 
 ### Insights
 
@@ -27,7 +27,3 @@ A feature-rich and high-performance YouTube userscript, built on the InnerTube A
 ### DDL
 
 ![image](https://github.com/user-attachments/assets/b4eb7641-76dd-4018-99e1-65461d245b9c)
-
-### Settings
-
-![image](https://github.com/user-attachments/assets/2370ca9a-a600-494c-8815-1d229b448c0b)
