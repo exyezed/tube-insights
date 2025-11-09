@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TubeInsights
 // @namespace    https://github.com/exyezed/tube-insights
-// @version      1.0.1
+// @version      1.0.2
 // @author       exyezed
 // @description  A feature-rich and high-performance YouTube userscript, built on the InnerTube API — delivering advanced analytics, live stats, smart bookmarking, and seamless video/audio downloading without leaving YouTube.
 // @license      MIT
@@ -132,7 +132,8 @@
     screenshotVideo: true,
     screenshotFormat: "png",
     screenshotDownload: true,
-    screenshotCopy: true
+    screenshotCopy: true,
+    hideProgressBar: false
   });
   function togglePanel() {
     isPanelVisible.value = !isPanelVisible.value;
@@ -161,12 +162,17 @@
       "true"
     );
     const screenshotCopy = await storage.get("module-screenshot-copy", "true");
+    const hideProgressBar = await storage.get(
+      "module-hide-progress-bar",
+      "false"
+    );
     moduleSettings.value = {
       loopVideo: loopVideo === "true",
       screenshotVideo: screenshotVideo === "true",
       screenshotFormat,
       screenshotDownload: screenshotDownload === "true",
-      screenshotCopy: screenshotCopy === "true"
+      screenshotCopy: screenshotCopy === "true",
+      hideProgressBar: hideProgressBar === "true"
     };
   }
   function openSaveChannelDialog(data) {
@@ -457,8 +463,9 @@
     }
     async fetchTabCount(tabType, onProgress) {
       const channelId = await this.getChannelId();
-      if (!channelId) return 0;
+      if (!channelId) return { count: 0, views: 0 };
       let totalCount = 0;
+      let totalViews = 0;
       let continuation = void 0;
       let pageCount = 0;
       const maxPages = 100;
@@ -472,19 +479,29 @@
           });
           const items = this.parseTabData(tabType, response);
           const videoIds = this.parseVideoIds(items, tabType);
+          const views = this.parseVideoViews(items, tabType);
+          if (videoIds.length === 0 && pageCount > 0) {
+            break;
+          }
           totalCount += videoIds.length;
+          totalViews += views.reduce((sum, view) => sum + view, 0);
           continuation = this.getContinuation(response, tabType);
           pageCount++;
           if (onProgress) {
-            onProgress(totalCount, !!continuation);
+            onProgress(totalCount, totalViews, !!continuation);
           }
-          if (!continuation || pageCount >= maxPages) break;
+          if (!continuation || pageCount >= maxPages) {
+            break;
+          }
           await new Promise((resolve) => setTimeout(resolve, 100));
         } while (continuation);
-        return totalCount;
+        return { count: totalCount, views: totalViews };
       } catch (error) {
-        console.error("[TubeInsights] Error fetching tab count:", error);
-        return totalCount > 0 ? totalCount : 0;
+        console.error(
+          `[TubeInsights] Error fetching ${tabType} at page ${pageCount}:`,
+          error
+        );
+        return { count: totalCount > 0 ? totalCount : 0, views: totalViews };
       }
     }
     async innerTubeRequest(endpoint, data) {
@@ -494,7 +511,8 @@
         headers: {
           "Content-Type": "application/json",
           "X-YouTube-Client-Name": "1",
-          "X-YouTube-Client-Version": INNERTUBE_CLIENT_VERSION
+          "X-YouTube-Client-Version": INNERTUBE_CLIENT_VERSION,
+          "Accept-Language": "en-US,en;q=0.9"
         },
         body: JSON.stringify({
           context: {
@@ -502,7 +520,8 @@
               clientName: INNERTUBE_CLIENT_NAME,
               clientVersion: INNERTUBE_CLIENT_VERSION,
               hl: "en",
-              gl: "US"
+              gl: "US",
+              utcOffsetMinutes: 0
             }
           },
           ...data
@@ -576,6 +595,67 @@
         }).filter((id) => id);
       }
       return items.filter((item) => item.videoRenderer).map((item) => item.videoRenderer.videoId).filter((id) => id);
+    }
+    parseVideoViews(items, tabType) {
+      if (tabType === "shorts") {
+        return items.filter((item) => item.shortsLockupViewModel || item.reelItemRenderer).map((item, index2) => {
+          const lockup = item.shortsLockupViewModel;
+          if (lockup) {
+            const accessibilityText = lockup.accessibilityText || "";
+            return this.parseViewCount(accessibilityText);
+          }
+          const renderer = item.reelItemRenderer;
+          const viewCountText = renderer?.viewCountText?.simpleText || renderer?.viewCountText?.runs?.[0]?.text || renderer?.viewCountText?.accessibility?.accessibilityData?.label || "0";
+          return this.parseViewCount(viewCountText);
+        });
+      }
+      return items.filter((item) => item.videoRenderer).map((item, index2) => {
+        const viewCountText = item.videoRenderer?.viewCountText?.simpleText || item.videoRenderer?.viewCountText?.runs?.[0]?.text || "0";
+        return this.parseViewCount(viewCountText);
+      });
+    }
+    parseViewCount(viewText) {
+      if (!viewText) return 0;
+      const text = viewText.toLowerCase();
+      const multipliers = {
+        thousand: 1e3,
+        million: 1e6,
+        billion: 1e9,
+        k: 1e3,
+        m: 1e6,
+        b: 1e9
+      };
+      const wordMatch = text.match(/([\d,.]+)\s*(thousand|million|billion)\s*/i);
+      if (wordMatch && wordMatch[1] && wordMatch[2]) {
+        const numberStr = wordMatch[1].replace(/,/g, "");
+        const number = parseFloat(numberStr);
+        if (!isNaN(number)) {
+          const multiplierWord = wordMatch[2].toLowerCase();
+          if (multipliers[multiplierWord]) {
+            return Math.floor(number * multipliers[multiplierWord]);
+          }
+        }
+      }
+      const suffixMatch = text.match(/([\d,.]+)\s*([kmb])\b/i);
+      if (suffixMatch && suffixMatch[1] && suffixMatch[2]) {
+        const numberStr = suffixMatch[1].replace(/,/g, "");
+        const number = parseFloat(numberStr);
+        if (!isNaN(number)) {
+          const suffix = suffixMatch[2].toLowerCase();
+          if (multipliers[suffix]) {
+            return Math.floor(number * multipliers[suffix]);
+          }
+        }
+      }
+      const plainMatch = text.match(/\b([\d,]+)\b/);
+      if (plainMatch && plainMatch[1]) {
+        const numberStr = plainMatch[1].replace(/,/g, "");
+        const number = parseFloat(numberStr);
+        if (!isNaN(number) && number > 0) {
+          return Math.floor(number);
+        }
+      }
+      return 0;
     }
   }
   function CountryFlag({ countryCode, size = "md" }) {
@@ -1040,9 +1120,9 @@
     const [monetization, setMonetization] = hooks.useState(null);
     const [loading, setLoading] = hooks.useState(false);
     const [tabs, setTabs] = hooks.useState([
-      { type: "videos", label: "Videos", count: 0, isLoading: false },
-      { type: "shorts", label: "Shorts", count: 0, isLoading: false },
-      { type: "live", label: "Live", count: 0, isLoading: false }
+      { type: "videos", label: "Videos", count: 0, views: 0, isLoading: false },
+      { type: "shorts", label: "Shorts", count: 0, views: 0, isLoading: false },
+      { type: "live", label: "Live", count: 0, views: 0, isLoading: false }
     ]);
     const [youtubeService2] = hooks.useState(() => new YouTubeService());
     const lastMonetizationCheckRef = hooks.useRef(null);
@@ -1288,9 +1368,21 @@
         setMonetization(null);
         lastMonetizationCheckRef.current = null;
         setTabs([
-          { type: "videos", label: "Videos", count: 0, isLoading: false },
-          { type: "shorts", label: "Shorts", count: 0, isLoading: false },
-          { type: "live", label: "Live", count: 0, isLoading: false }
+          {
+            type: "videos",
+            label: "Videos",
+            count: 0,
+            views: 0,
+            isLoading: false
+          },
+          {
+            type: "shorts",
+            label: "Shorts",
+            count: 0,
+            views: 0,
+            isLoading: false
+          },
+          { type: "live", label: "Live", count: 0, views: 0, isLoading: false }
         ]);
         if (id && isPanelVisible.value) {
           await fetchChannelData(id);
@@ -1302,19 +1394,29 @@
       setTabs((prev) => prev.map((t) => ({ ...t, isLoading: true })));
       await Promise.all(
         tabs.map(async (tab) => {
-          const count = await youtubeService2.fetchTabCount(
+          const result = await youtubeService2.fetchTabCount(
             tab.type,
-            (currentCount, hasMore) => {
+            (currentCount, currentViews, hasMore) => {
               setTabs(
                 (prev) => prev.map(
-                  (t) => t.type === tab.type ? { ...t, count: currentCount, isLoading: hasMore } : t
+                  (t) => t.type === tab.type ? {
+                    ...t,
+                    count: currentCount,
+                    views: currentViews,
+                    isLoading: hasMore
+                  } : t
                 )
               );
             }
           );
           setTabs(
             (prev) => prev.map(
-              (t) => t.type === tab.type ? { ...t, count, isLoading: false } : t
+              (t) => t.type === tab.type ? {
+                ...t,
+                count: result.count,
+                views: result.views,
+                isLoading: false
+              } : t
             )
           );
         })
@@ -1337,13 +1439,13 @@
       return () => clearInterval(intervalId);
     }, [channelHandle, videoId, activeTab.value]);
     hooks.useEffect(() => {
-      if (channelId && activeTab.value === "insights") {
+      if (channelId && activeTab.value === "insights" && isPanelVisible.value) {
         const hasLoadedCounts = tabs.some((tab) => tab.count > 0);
         if (!hasLoadedCounts) {
           loadTabCounts();
         }
       }
-    }, [channelId, activeTab.value]);
+    }, [channelId, activeTab.value, isPanelVisible.value]);
     hooks.useEffect(() => {
       if (activeTab.value === "insights" && isPanelVisible.value && !loading) {
         if (channelId && !channelInfo) {
@@ -1881,15 +1983,22 @@ u(
                   ),
 u("span", { className: "text-xl", children: tab.label })
                 ] }),
-u("div", { className: "text-right", children: u("span", { className: "text-xl font-semibold", children: tab.count.toLocaleString() }) })
+u("div", { className: "text-right", children: [
+u("div", { className: "text-xl font-semibold", children: tab.count.toLocaleString() }),
+u("div", { className: "text-lg text-secondary", children: formatNumber(tab.views) })
+                ] })
               ] }),
               tab.isLoading && u("div", { className: "mt-2", children: u("progress", { className: "progress progress-primary w-full h-1" }) })
             ] }, tab.type);
           })
         ] }),
 u("div", { className: "bg-primary text-primary-content rounded-lg p-4", children: u("div", { className: "flex items-center justify-between", children: [
-u("span", { className: "text-xl", children: "Total Videos" }),
+u("span", { className: "text-xl font-semibold", children: "Total Videos" }),
 u("span", { className: "text-xl font-semibold", children: tabs.reduce((sum, tab) => sum + tab.count, 0).toLocaleString() })
+        ] }) }),
+u("div", { className: "bg-secondary text-secondary-content rounded-lg p-4", children: u("div", { className: "flex items-center justify-between", children: [
+u("span", { className: "text-xl font-semibold", children: "Total Views" }),
+u("span", { className: "text-xl font-semibold", children: formatNumber(tabs.reduce((sum, tab) => sum + tab.views, 0)) })
         ] }) })
       ] })
     ] });
@@ -3250,7 +3359,7 @@ u(
     ] });
   }
   function sanitizeFilename(filename) {
-    return filename.replace(/[<>:"/\\|?*\x00-\x1F\x7F]/g, "_").replace(/\s+/g, " ").trim().substring(0, 200);
+    return filename.replace(/[<>:"/\\|?*\x00-\x1F\x7F]/g, "").replace(/\s+/g, " ").trim().substring(0, 200);
   }
   const API_KEY_URL = "https://api.mp3youtube.cc/v2/sanity/key";
   const API_CONVERT_URL = "https://api.mp3youtube.cc/v2/converter";
@@ -4746,6 +4855,9 @@ u(
     const [screenshotCopy, setScreenshotCopy] = hooks.useState(
       moduleSettings.value.screenshotCopy
     );
+    const [hideProgressBar, setHideProgressBar] = hooks.useState(
+      moduleSettings.value.hideProgressBar
+    );
     hooks.useEffect(() => {
       loadSettings2();
     }, []);
@@ -4778,6 +4890,11 @@ u(
         "true"
       );
       setScreenshotCopy(screenshotCopySaved === "true");
+      const hideProgressBarSaved = await storage.get(
+        "module-hide-progress-bar",
+        "false"
+      );
+      setHideProgressBar(hideProgressBarSaved === "true");
     };
     const handleBookmarkPerPageChange = async (value) => {
       setBookmarkPerPage(value);
@@ -4844,6 +4961,15 @@ u(
       moduleSettings.value = { ...moduleSettings.value, screenshotCopy: enabled };
       window.dispatchEvent(new CustomEvent("module-settings-updated"));
     };
+    const handleHideProgressBarToggle = async (enabled) => {
+      setHideProgressBar(enabled);
+      await storage.set("module-hide-progress-bar", enabled.toString());
+      moduleSettings.value = {
+        ...moduleSettings.value,
+        hideProgressBar: enabled
+      };
+      window.dispatchEvent(new CustomEvent("module-settings-updated"));
+    };
     const handleResetDefaults = async () => {
       await storage.set("bookmark-per-page", "8");
       await storage.set("ddl-per-page", "8");
@@ -4858,24 +4984,33 @@ u(
       await storage.set("module-screenshot-format", "png");
       await storage.set("module-screenshot-download", "true");
       await storage.set("module-screenshot-copy", "true");
+      await storage.set("module-hide-progress-bar", "false");
       setBookmarkPerPage(8);
       setDdlPerPage(8);
       setWidth(350);
       panelWidth.value = 350;
+      const { currentTheme: currentTheme2 } = await __vitePreload(async () => {
+        const { currentTheme: currentTheme3 } = await Promise.resolve().then(() => index);
+        return { currentTheme: currentTheme3 };
+      }, void 0 );
+      currentTheme2.value = "light";
       setLoopVideo(true);
       setScreenshotVideo(true);
       setScreenshotFormat("png");
       setScreenshotDownload(true);
       setScreenshotCopy(true);
+      setHideProgressBar(false);
       moduleSettings.value = {
         loopVideo: true,
         screenshotVideo: true,
         screenshotFormat: "png",
         screenshotDownload: true,
-        screenshotCopy: true
+        screenshotCopy: true,
+        hideProgressBar: false
       };
       window.dispatchEvent(new CustomEvent("settings-updated"));
       window.dispatchEvent(new CustomEvent("module-settings-updated"));
+      window.dispatchEvent(new CustomEvent("themeChanged"));
       resetDialogRef.current?.close();
       setShowResetDialog(false);
     };
@@ -5065,6 +5200,23 @@ u(
                 )
               ] })
             ] })
+          ] }),
+u("div", { className: "bg-base-200 rounded-lg p-4", children: [
+u("div", { className: "flex items-center justify-between mb-2", children: [
+u("label", { className: "text-xl font-medium", children: "Hide Resume Progress Bar" }),
+u(
+                "input",
+                {
+                  type: "checkbox",
+                  className: "toggle toggle-primary",
+                  checked: hideProgressBar,
+                  onChange: (e) => handleHideProgressBarToggle(
+                    e.target.checked
+                  )
+                }
+              )
+            ] }),
+u("p", { className: "text-lg opacity-60", children: "Hide the red progress bar on video thumbnails" })
           ] })
         ] })
       ] }),
@@ -5165,7 +5317,7 @@ u("span", { children: "Report an Issue" })
       ] })
     ] });
   }
-  const version = "1.0.1";
+  const version = "1.0.2";
   const pkg = {
     version
   };
@@ -6277,10 +6429,148 @@ u(BookmarkDialogs, { onDataChange: handleBookmarkDataChange }),
 u(SubtitleDialog, {})
     ] });
   }
-  const youtubeService = new YouTubeService();
   const CLICK_DURATION = 500;
-  const buttonCSS = `
-  a.tubeinsights-loop-button, 
+  const ICON_PATHS = {
+    loop: "M16.5 6.671c.116 0 .223.04.308.107l.067.063l.017.02a5 5 0 0 1-3.675 8.135L13 15H7a5.07 5.07 0 0 1-.303-.009l1.657 1.655a.5.5 0 0 1 .057.638l-.057.07a.5.5 0 0 1-.638.057l-.07-.057l-2.5-2.5a.5.5 0 0 1-.057-.638l.057-.07l2.5-2.5a.5.5 0 0 1 .765.638l-.057.07l-1.637 1.636l.14.008L7 14h6a4 4 0 0 0 3.11-6.516a.5.5 0 0 1 .39-.812Zm-4.854-4.025a.5.5 0 0 1 .638-.057l.07.057l2.5 2.5l.057.07a.5.5 0 0 1 0 .568l-.057.07l-2.5 2.5l-.07.057a.5.5 0 0 1-.568 0l-.07-.057l-.057-.07a.5.5 0 0 1 0-.568l.057-.07l1.637-1.636l-.14-.008L13 6H7a4 4 0 0 0-3.105 6.522a.5.5 0 1 1-.801.601a5 5 0 0 1 3.689-8.119L7 5h6c.102 0 .203.003.303.009l-1.657-1.655l-.057-.07a.5.5 0 0 1 .057-.638Z",
+    screenshot: "M17 6.125v2.91A3.529 3.529 0 0 0 16.5 9H16V6.125a.965.965 0 0 0-.289-.711l-2.125-2.125A.962.962 0 0 0 13 3.008V5.5a1.507 1.507 0 0 1-.922 1.383A1.327 1.327 0 0 1 11.5 7h-4a1.507 1.507 0 0 1-1.383-.922A1.327 1.327 0 0 1 6 5.5V3H5a.972.972 0 0 0-.703.289a1.081 1.081 0 0 0-.219.32A.856.856 0 0 0 4 4v10a.972.972 0 0 0 .078.391c.052.118.123.226.211.32a.854.854 0 0 0 .313.211c.127.049.262.075.398.078v-4.5a1.507 1.507 0 0 1 .922-1.383c.181-.082.379-.122.578-.117h5.992a3.489 3.489 0 0 0-2.442 1H6.5a.505.505 0 0 0-.5.5V15h3v1H5a1.884 1.884 0 0 1-.758-.156a2.2 2.2 0 0 1-.64-.422A1.9 1.9 0 0 1 3 14.039V4c-.001-.26.052-.519.156-.758a2.2 2.2 0 0 1 .422-.642a1.9 1.9 0 0 1 .622-.436c.24-.105.499-.16.761-.164h7.914c.262 0 .523.05.766.148c.244.099.465.248.648.438l2.125 2.125c.186.185.332.405.43.648c.099.244.152.503.156.766ZM7 3v2.5a.505.505 0 0 0 .5.5h4a.505.505 0 0 0 .5-.5V3H7Zm3 9.5a2.5 2.5 0 0 1 2.5-2.5h4a2.5 2.5 0 0 1 2.5 2.5v4c0 .51-.152.983-.414 1.379l-3.025-3.025a1.5 1.5 0 0 0-2.122 0l-3.025 3.025A2.488 2.488 0 0 1 10 16.5v-4Zm7 .25a.75.75 0 1 0-1.5 0a.75.75 0 0 0 1.5 0Zm-5.879 5.836c.396.262.87.414 1.379.414h4c.51 0 .983-.152 1.379-.414l-3.025-3.025a.5.5 0 0 0-.708 0l-3.025 3.025Z",
+    copy: "M7.085 3A1.5 1.5 0 0 1 8.5 2h3a1.5 1.5 0 0 1 1.415 1H14.5A1.5 1.5 0 0 1 16 4.5V9h-1V4.5a.5.5 0 0 0-.5-.5h-1.585A1.5 1.5 0 0 1 11.5 5h-3a1.5 1.5 0 0 1-1.415-1H5.5a.5.5 0 0 0-.5.5v12a.5.5 0 0 0 .5.5h3.535c.051.353.154.69.302 1H5.5A1.5 1.5 0 0 1 4 16.5v-12A1.5 1.5 0 0 1 5.5 3h1.585ZM8.5 3a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1h-3Zm1.5 9.5a2.5 2.5 0 0 1 2.5-2.5h4a2.5 2.5 0 0 1 2.5 2.5v4c0 .51-.152.983-.414 1.379l-3.025-3.025a1.5 1.5 0 0 0-2.122 0l-3.025 3.025A2.488 2.488 0 0 1 10 16.5v-4Zm7 .25a.75.75 0 1 0-1.5 0a.75.75 0 0 0 1.5 0Zm-5.879 5.836c.396.262.87.414 1.379.414h4c.51 0 .983-.152 1.379-.414l-3.025-3.025a.5.5 0 0 0-.708 0l-3.025 3.025Z",
+    checkCircle: "M10 2a8 8 0 1 1 0 16a8 8 0 0 1 0-16Zm0 1a7 7 0 1 0 0 14a7 7 0 0 0 0-14Zm3.358 4.646a.5.5 0 0 1 .058.638l-.058.07l-4.004 4.004a.5.5 0 0 1-.638.058l-.07-.058l-2-2a.5.5 0 0 1 .638-.765l.07.058L9 11.298l3.651-3.652a.5.5 0 0 1 .707 0Z"
+  };
+  function createGradient(id, color1, color2) {
+    const gradient = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "linearGradient"
+    );
+    gradient.setAttribute("id", id);
+    gradient.setAttribute("x1", "0%");
+    gradient.setAttribute("y1", "0%");
+    gradient.setAttribute("x2", "100%");
+    gradient.setAttribute("y2", "100%");
+    const stop1 = document.createElementNS("http://www.w3.org/2000/svg", "stop");
+    stop1.setAttribute("offset", "0%");
+    stop1.setAttribute("style", `stop-color:${color1}`);
+    const stop2 = document.createElementNS("http://www.w3.org/2000/svg", "stop");
+    stop2.setAttribute("offset", "100%");
+    stop2.setAttribute("style", `stop-color:${color2}`);
+    gradient.appendChild(stop1);
+    gradient.appendChild(stop2);
+    return gradient;
+  }
+  function createIcon(viewBox, pathData, isShortsButton = false) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    svg.setAttribute("height", "24px");
+    svg.setAttribute("viewBox", viewBox);
+    svg.setAttribute("width", "24px");
+    svg.setAttribute("fill", "#e8eaed");
+    if (!isShortsButton) {
+      const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+      defs.appendChild(createGradient("buttonGradient", "#f03", "#ff2791"));
+      svg.appendChild(defs);
+    }
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", pathData);
+    svg.appendChild(path);
+    return svg;
+  }
+  function addClickAnimation(button) {
+    const path = button.querySelector("svg path");
+    if (!path) return;
+    const originalPath = path.getAttribute("d");
+    if (!originalPath) return;
+    path.setAttribute("d", ICON_PATHS.checkCircle);
+    setTimeout(() => {
+      path.setAttribute("d", originalPath);
+    }, CLICK_DURATION);
+  }
+  function createButton(className, icon, onClick) {
+    const button = document.createElement("a");
+    button.classList.add("ytp-button", className);
+    button.appendChild(icon);
+    button.addEventListener("click", onClick);
+    return button;
+  }
+  function waitForVideo() {
+    return new Promise((resolve) => {
+      const check = () => document.querySelector("video") ? resolve() : setTimeout(check, 100);
+      check();
+    });
+  }
+  const CSS$2 = `
+  a.tubeinsights-loop-button {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+  }
+
+  a.tubeinsights-loop-button svg {
+      transition: transform 0.2s ease, fill 0.2s ease;
+      display: block !important;
+      margin: auto !important;
+      vertical-align: middle !important;
+  }
+
+  a.tubeinsights-loop-button:hover svg {
+      transform: scale(1.1);
+  }
+
+  a.tubeinsights-loop-button.active svg {
+      fill: url(#buttonGradient);
+  }
+`;
+  const loopVideoModule = {
+    async init() {
+      if (!moduleSettings.value.loopVideo) return;
+      const rightControls = await this.waitForRightControls();
+      if (!rightControls) return;
+      this.insertButton(rightControls);
+      this.addLoopObserver();
+    },
+    waitForRightControls() {
+      return new Promise((resolve) => {
+        let attempts = 0;
+        const check = () => {
+          const controls = document.querySelector("div.ytp-right-controls");
+          if (controls) resolve(controls);
+          else if (attempts++ >= 50) resolve(null);
+          else setTimeout(check, 100);
+        };
+        check();
+      });
+    },
+    insertButton(rightControls) {
+      if (document.querySelector(".tubeinsights-loop-button")) return;
+      const loopButton = createButton(
+        "tubeinsights-loop-button",
+        createIcon("0 0 20 20", ICON_PATHS.loop),
+        () => {
+          const video = document.querySelector("video");
+          if (!video) return;
+          video.loop = !video.loop;
+          if (video.loop) video.play();
+          loopButton.classList.toggle("active");
+        }
+      );
+      rightControls.insertBefore(loopButton, rightControls.firstChild);
+    },
+    addLoopObserver() {
+      const video = document.querySelector("video");
+      if (!video) return;
+      new MutationObserver(() => {
+        const loopButton = document.querySelector(".tubeinsights-loop-button");
+        const isLooped = video.hasAttribute("loop");
+        const isActive = loopButton?.classList.contains("active");
+        if (isLooped !== isActive) {
+          loopButton?.classList.toggle("active");
+        }
+      }).observe(video, { attributes: true, attributeFilter: ["loop"] });
+    },
+    cleanup() {
+      document.querySelector(".tubeinsights-loop-button")?.remove();
+    }
+  };
+  const youtubeService = new YouTubeService();
+  const CSS$1 = `
   a.tubeinsights-save-screenshot-button,
   a.tubeinsights-copy-screenshot-button {
       display: flex !important;
@@ -6288,7 +6578,6 @@ u(SubtitleDialog, {})
       justify-content: center !important;
   }
 
-  a.tubeinsights-loop-button svg, 
   a.tubeinsights-save-screenshot-button svg,
   a.tubeinsights-copy-screenshot-button svg {
       transition: transform 0.2s ease, fill 0.2s ease;
@@ -6297,14 +6586,9 @@ u(SubtitleDialog, {})
       vertical-align: middle !important;
   }
 
-  a.tubeinsights-loop-button:hover svg,
   a.tubeinsights-save-screenshot-button:hover svg,
   a.tubeinsights-copy-screenshot-button:hover svg {
       transform: scale(1.1);
-  }
-
-  a.tubeinsights-loop-button.active svg {
-      fill: url(#buttonGradient);
   }
 
   .tubeinsights-shorts-save-button,
@@ -6364,49 +6648,6 @@ u(SubtitleDialog, {})
       fill: #030303;
   }
 `;
-  function createGradient(id, color1, color2) {
-    const gradient = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "linearGradient"
-    );
-    gradient.setAttribute("id", id);
-    gradient.setAttribute("x1", "0%");
-    gradient.setAttribute("y1", "0%");
-    gradient.setAttribute("x2", "100%");
-    gradient.setAttribute("y2", "100%");
-    const stop1 = document.createElementNS("http://www.w3.org/2000/svg", "stop");
-    stop1.setAttribute("offset", "0%");
-    stop1.setAttribute("style", `stop-color:${color1}`);
-    const stop2 = document.createElementNS("http://www.w3.org/2000/svg", "stop");
-    stop2.setAttribute("offset", "100%");
-    stop2.setAttribute("style", `stop-color:${color2}`);
-    gradient.appendChild(stop1);
-    gradient.appendChild(stop2);
-    return gradient;
-  }
-  function createIcon(viewBox, pathData, isShortsButton = false) {
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    svg.setAttribute("height", "24px");
-    svg.setAttribute("viewBox", viewBox);
-    svg.setAttribute("width", "24px");
-    svg.setAttribute("fill", "#e8eaed");
-    if (!isShortsButton) {
-      const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-      defs.appendChild(createGradient("buttonGradient", "#f03", "#ff2791"));
-      svg.appendChild(defs);
-    }
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", pathData);
-    svg.appendChild(path);
-    return svg;
-  }
-  const ICON_PATHS = {
-    loop: "M16.5 6.671c.116 0 .223.04.308.107l.067.063l.017.02a5 5 0 0 1-3.675 8.135L13 15H7a5.07 5.07 0 0 1-.303-.009l1.657 1.655a.5.5 0 0 1 .057.638l-.057.07a.5.5 0 0 1-.638.057l-.07-.057l-2.5-2.5a.5.5 0 0 1-.057-.638l.057-.07l2.5-2.5a.5.5 0 0 1 .765.638l-.057.07l-1.637 1.636l.14.008L7 14h6a4 4 0 0 0 3.11-6.516a.5.5 0 0 1 .39-.812Zm-4.854-4.025a.5.5 0 0 1 .638-.057l.07.057l2.5 2.5l.057.07a.5.5 0 0 1 0 .568l-.057.07l-2.5 2.5l-.07.057a.5.5 0 0 1-.568 0l-.07-.057l-.057-.07a.5.5 0 0 1 0-.568l.057-.07l1.637-1.636l-.14-.008L13 6H7a4 4 0 0 0-3.105 6.522a.5.5 0 1 1-.801.601a5 5 0 0 1 3.689-8.119L7 5h6c.102 0 .203.003.303.009l-1.657-1.655l-.057-.07a.5.5 0 0 1 .057-.638Z",
-    screenshot: "M17 6.125v2.91A3.529 3.529 0 0 0 16.5 9H16V6.125a.965.965 0 0 0-.289-.711l-2.125-2.125A.962.962 0 0 0 13 3.008V5.5a1.507 1.507 0 0 1-.922 1.383A1.327 1.327 0 0 1 11.5 7h-4a1.507 1.507 0 0 1-1.383-.922A1.327 1.327 0 0 1 6 5.5V3H5a.972.972 0 0 0-.703.289a1.081 1.081 0 0 0-.219.32A.856.856 0 0 0 4 4v10a.972.972 0 0 0 .078.391c.052.118.123.226.211.32a.854.854 0 0 0 .313.211c.127.049.262.075.398.078v-4.5a1.507 1.507 0 0 1 .922-1.383c.181-.082.379-.122.578-.117h5.992a3.489 3.489 0 0 0-2.442 1H6.5a.505.505 0 0 0-.5.5V15h3v1H5a1.884 1.884 0 0 1-.758-.156a2.2 2.2 0 0 1-.64-.422A1.9 1.9 0 0 1 3 14.039V4c-.001-.26.052-.519.156-.758a2.2 2.2 0 0 1 .422-.642a1.9 1.9 0 0 1 .622-.436c.24-.105.499-.16.761-.164h7.914c.262 0 .523.05.766.148c.244.099.465.248.648.438l2.125 2.125c.186.185.332.405.43.648c.099.244.152.503.156.766ZM7 3v2.5a.505.505 0 0 0 .5.5h4a.505.505 0 0 0 .5-.5V3H7Zm3 9.5a2.5 2.5 0 0 1 2.5-2.5h4a2.5 2.5 0 0 1 2.5 2.5v4c0 .51-.152.983-.414 1.379l-3.025-3.025a1.5 1.5 0 0 0-2.122 0l-3.025 3.025A2.488 2.488 0 0 1 10 16.5v-4Zm7 .25a.75.75 0 1 0-1.5 0a.75.75 0 0 0 1.5 0Zm-5.879 5.836c.396.262.87.414 1.379.414h4c.51 0 .983-.152 1.379-.414l-3.025-3.025a.5.5 0 0 0-.708 0l-3.025 3.025Z",
-    copy: "M7.085 3A1.5 1.5 0 0 1 8.5 2h3a1.5 1.5 0 0 1 1.415 1H14.5A1.5 1.5 0 0 1 16 4.5V9h-1V4.5a.5.5 0 0 0-.5-.5h-1.585A1.5 1.5 0 0 1 11.5 5h-3a1.5 1.5 0 0 1-1.415-1H5.5a.5.5 0 0 0-.5.5v12a.5.5 0 0 0 .5.5h3.535c.051.353.154.69.302 1H5.5A1.5 1.5 0 0 1 4 16.5v-12A1.5 1.5 0 0 1 5.5 3h1.585ZM8.5 3a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1h-3Zm1.5 9.5a2.5 2.5 0 0 1 2.5-2.5h4a2.5 2.5 0 0 1 2.5 2.5v4c0 .51-.152.983-.414 1.379l-3.025-3.025a1.5 1.5 0 0 0-2.122 0l-3.025 3.025A2.488 2.488 0 0 1 10 16.5v-4Zm7 .25a.75.75 0 1 0-1.5 0a.75.75 0 0 0 1.5 0Zm-5.879 5.836c.396.262.87.414 1.379.414h4c.51 0 .983-.152 1.379-.414l-3.025-3.025a.5.5 0 0 0-.708 0l-3.025 3.025Z",
-    checkCircle: "M10 2a8 8 0 1 1 0 16a8 8 0 0 1 0-16Zm0 1a7 7 0 1 0 0 14a7 7 0 0 0 0-14Zm3.358 4.646a.5.5 0 0 1 .058.638l-.058.07l-4.004 4.004a.5.5 0 0 1-.638.058l-.07-.058l-2-2a.5.5 0 0 1 .638-.765l.07.058L9 11.298l3.651-3.652a.5.5 0 0 1 .707 0Z"
-  };
   function formatTime(time) {
     const date = new Date();
     const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
@@ -6503,29 +6744,12 @@ u(SubtitleDialog, {})
       }, mimeType);
     });
   }
-  function addClickAnimation(button) {
-    const path = button.querySelector("svg path");
-    if (!path) return;
-    const originalPath = path.getAttribute("d");
-    if (!originalPath) return;
-    path.setAttribute("d", ICON_PATHS.checkCircle);
-    setTimeout(() => {
-      path.setAttribute("d", originalPath);
-    }, CLICK_DURATION);
-  }
-  function createButton(className, icon, onClick) {
-    const button = document.createElement("a");
-    button.classList.add("ytp-button", className);
-    button.appendChild(icon);
-    button.addEventListener("click", onClick);
-    return button;
-  }
-  const regularVideo = {
+  const screenshotVideoModule = {
     async init() {
+      if (!moduleSettings.value.screenshotVideo) return;
       const rightControls = await this.waitForRightControls();
       if (!rightControls) return;
-      this.insertButtonsToRightControls(rightControls);
-      this.addLoopObserver();
+      this.insertButtons(rightControls);
     },
     waitForRightControls() {
       return new Promise((resolve) => {
@@ -6539,71 +6763,42 @@ u(SubtitleDialog, {})
         check();
       });
     },
-    insertButtonsToRightControls(rightControls) {
-      if (moduleSettings.value.loopVideo && !document.querySelector(".tubeinsights-loop-button")) {
-        const loopButton = createButton(
-          "tubeinsights-loop-button",
-          createIcon("0 0 20 20", ICON_PATHS.loop),
-          () => {
-            const video = document.querySelector("video");
-            if (!video) return;
-            video.loop = !video.loop;
-            if (video.loop) video.play();
-            loopButton.classList.toggle("active");
+    insertButtons(rightControls) {
+      if (moduleSettings.value.screenshotDownload && !document.querySelector(".tubeinsights-save-screenshot-button")) {
+        const saveButton = createButton(
+          "tubeinsights-save-screenshot-button",
+          createIcon("0 0 20 20", ICON_PATHS.screenshot),
+          async (e) => {
+            addClickAnimation(e.currentTarget);
+            const player = document.querySelector("video");
+            if (player) {
+              await captureScreenshot(player, { download: true, copy: false });
+            }
           }
         );
-        rightControls.insertBefore(loopButton, rightControls.firstChild);
+        rightControls.insertBefore(saveButton, rightControls.firstChild);
       }
-      if (moduleSettings.value.screenshotVideo) {
-        if (moduleSettings.value.screenshotDownload && !document.querySelector(".tubeinsights-save-screenshot-button")) {
-          const saveButton = createButton(
-            "tubeinsights-save-screenshot-button",
-            createIcon("0 0 20 20", ICON_PATHS.screenshot),
-            async (e) => {
-              addClickAnimation(e.currentTarget);
-              const player = document.querySelector("video");
-              if (player) {
-                await captureScreenshot(player, { download: true, copy: false });
-              }
+      if (moduleSettings.value.screenshotCopy && !document.querySelector(".tubeinsights-copy-screenshot-button")) {
+        const copyButton = createButton(
+          "tubeinsights-copy-screenshot-button",
+          createIcon("0 0 20 20", ICON_PATHS.copy),
+          async (e) => {
+            addClickAnimation(e.currentTarget);
+            const player = document.querySelector("video");
+            if (player) {
+              await captureScreenshot(player, { download: false, copy: true });
             }
-          );
-          rightControls.insertBefore(saveButton, rightControls.firstChild);
-        }
-        if (moduleSettings.value.screenshotCopy && !document.querySelector(".tubeinsights-copy-screenshot-button")) {
-          const copyButton = createButton(
-            "tubeinsights-copy-screenshot-button",
-            createIcon("0 0 20 20", ICON_PATHS.copy),
-            async (e) => {
-              addClickAnimation(e.currentTarget);
-              const player = document.querySelector("video");
-              if (player) {
-                await captureScreenshot(player, { download: false, copy: true });
-              }
-            }
-          );
-          rightControls.insertBefore(copyButton, rightControls.firstChild);
-        }
+          }
+        );
+        rightControls.insertBefore(copyButton, rightControls.firstChild);
       }
-    },
-    addLoopObserver() {
-      const video = document.querySelector("video");
-      if (!video) return;
-      new MutationObserver(() => {
-        const loopButton = document.querySelector(".tubeinsights-loop-button");
-        const isLooped = video.hasAttribute("loop");
-        const isActive = loopButton?.classList.contains("active");
-        if (isLooped !== isActive) {
-          loopButton?.classList.toggle("active");
-        }
-      }).observe(video, { attributes: true, attributeFilter: ["loop"] });
     },
     cleanup() {
-      document.querySelector(".tubeinsights-loop-button")?.remove();
       document.querySelector(".tubeinsights-save-screenshot-button")?.remove();
       document.querySelector(".tubeinsights-copy-screenshot-button")?.remove();
     }
   };
-  const shortsVideo = {
+  const screenshotShortsModule = {
     init() {
       if (!moduleSettings.value.screenshotVideo) return;
       if (moduleSettings.value.screenshotDownload) this.insertButton("save");
@@ -6662,20 +6857,43 @@ u(SubtitleDialog, {})
       document.querySelector(".tubeinsights-shorts-copy-button")?.remove();
     }
   };
-  function waitForVideo() {
-    return new Promise((resolve) => {
-      const check = () => document.querySelector("video") ? resolve() : setTimeout(check, 100);
-      check();
-    });
+  const CSS = `
+  /* Hide progress bar when enabled */
+  body.tubeinsights-hide-progress-bar ytd-thumbnail-overlay-resume-playback-renderer,
+  body.tubeinsights-hide-progress-bar yt-thumbnail-overlay-progress-bar-view-model {
+      display: none !important;
   }
+`;
+  const hideProgressBarModule = {
+    init() {
+      this.updateProgressBarVisibility();
+    },
+    updateProgressBarVisibility() {
+      if (moduleSettings.value.hideProgressBar) {
+        document.body.classList.add("tubeinsights-hide-progress-bar");
+      } else {
+        document.body.classList.remove("tubeinsights-hide-progress-bar");
+      }
+    },
+    cleanup() {
+      document.body.classList.remove("tubeinsights-hide-progress-bar");
+    }
+  };
+  const ALL_CSS = `
+${CSS$2}
+${CSS$1}
+${CSS}
+`;
   function initializeFeatures() {
-    regularVideo.init();
+    loopVideoModule.init();
+    screenshotVideoModule.init();
+    hideProgressBarModule.updateProgressBarVisibility();
     if (window.location.pathname.includes("/shorts/")) {
       initializeShortsWithRetry();
     }
   }
   function initializeShortsWithRetry(attempts = 0, maxAttempts = 10) {
-    shortsVideo.init();
+    screenshotShortsModule.init();
     if (attempts < maxAttempts) {
       setTimeout(() => {
         const hasButtons = document.querySelector(".tubeinsights-shorts-save-button") || document.querySelector(".tubeinsights-shorts-copy-button");
@@ -6686,25 +6904,32 @@ u(SubtitleDialog, {})
     }
   }
   function handleModuleSettingsUpdate() {
-    regularVideo.cleanup();
-    shortsVideo.cleanup();
+    loopVideoModule.cleanup();
+    screenshotVideoModule.cleanup();
+    screenshotShortsModule.cleanup();
+    hideProgressBarModule.updateProgressBarVisibility();
     initializeFeatures();
   }
   function initVideoModules() {
-    if (!document.getElementById("tubeinsights-video-modules-style")) {
-      const style = document.createElement("style");
-      style.id = "tubeinsights-video-modules-style";
-      style.textContent = buttonCSS;
-      document.head.append(style);
+    let styleElement = document.getElementById(
+      "tubeinsights-video-modules-style"
+    );
+    if (!styleElement) {
+      styleElement = document.createElement("style");
+      styleElement.id = "tubeinsights-video-modules-style";
+      document.head.append(styleElement);
     }
+    styleElement.textContent = ALL_CSS;
+    hideProgressBarModule.init();
     waitForVideo().then(initializeFeatures);
     window.addEventListener(
       "module-settings-updated",
       handleModuleSettingsUpdate
     );
     window.addEventListener("yt-navigate-finish", () => {
-      regularVideo.cleanup();
-      shortsVideo.cleanup();
+      loopVideoModule.cleanup();
+      screenshotVideoModule.cleanup();
+      screenshotShortsModule.cleanup();
       waitForVideo().then(initializeFeatures);
     });
     new MutationObserver((mutations) => {
@@ -6715,13 +6940,13 @@ u(SubtitleDialog, {})
             (node) => node instanceof Element && (node.matches("reel-action-bar-view-model") || node.querySelector("reel-action-bar-view-model") || node.matches("ytd-reel-video-renderer[is-active]") || node.querySelector("ytd-reel-video-renderer[is-active]"))
           );
           if (hasActionBar) {
-            setTimeout(() => shortsVideo.init(), 50);
+            setTimeout(() => screenshotShortsModule.init(), 50);
           }
         }
         if (mutation.type === "attributes" && mutation.attributeName === "is-active") {
           const target = mutation.target;
           if (target.matches("ytd-reel-video-renderer") && target.hasAttribute("is-active")) {
-            setTimeout(() => shortsVideo.init(), 50);
+            setTimeout(() => screenshotShortsModule.init(), 50);
           }
         }
       }
@@ -6820,6 +7045,35 @@ u(SubtitleDialog, {})
     const isLiveChat = window.location.pathname.startsWith("/live_chat");
     const isInIframe = window.self !== window.top;
     if (!isLiveChat && !isInIframe) {
+      const initModulesEarly = async () => {
+        const { moduleSettings: moduleSettings2 } = await __vitePreload(async () => {
+          const { moduleSettings: moduleSettings3 } = await Promise.resolve().then(() => index);
+          return { moduleSettings: moduleSettings3 };
+        }, void 0 );
+        const hideProgressBar = await storage.get(
+          "module-hide-progress-bar",
+          "false"
+        );
+        moduleSettings2.value = {
+          ...moduleSettings2.value,
+          hideProgressBar: hideProgressBar === "true"
+        };
+        if (hideProgressBar === "true") {
+          document.body.classList.add("tubeinsights-hide-progress-bar");
+        }
+        if (!document.getElementById("tubeinsights-video-modules-style")) {
+          const style = document.createElement("style");
+          style.id = "tubeinsights-video-modules-style";
+          style.textContent = `
+          body.tubeinsights-hide-progress-bar ytd-thumbnail-overlay-resume-playback-renderer,
+          body.tubeinsights-hide-progress-bar yt-thumbnail-overlay-progress-bar-view-model {
+            display: none !important;
+          }
+        `;
+          document.head.append(style);
+        }
+      };
+      initModulesEarly();
       const scheduleMount = () => {
         if (!document.body) {
           requestAnimationFrame(scheduleMount);
