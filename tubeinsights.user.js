@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TubeInsights
 // @namespace    https://github.com/exyezed/tube-insights
-// @version      1.0.3
+// @version      1.0.4
 // @author       exyezed
 // @description  A feature-rich and high-performance YouTube userscript, built on the InnerTube API — delivering advanced analytics, live stats, smart bookmarking, and seamless video/audio downloading without leaving YouTube.
 // @license      MIT
@@ -132,6 +132,14 @@
     thumbnailDownload: true,
     hideProgressBar: false
   });
+  const cobaltSettings = signals.signal({
+    enabled: false,
+    instanceUrl: "https://cobalt.nichind.dev",
+    videoCodec: "h264",
+    videoContainer: "auto",
+    filenameStyle: "basic",
+    preferredDubLang: ""
+  });
   function togglePanel() {
     isPanelVisible.value = !isPanelVisible.value;
     storage.set("tubeinsights-panelVisible", isPanelVisible.value.toString());
@@ -179,6 +187,32 @@
       thumbnailDownload: thumbnailDownload === "true",
       hideProgressBar: hideProgressBar === "true"
     };
+    const cobaltEnabled = await storage.get("cobalt-enabled", "false");
+    const cobaltInstanceUrl = await storage.get(
+      "cobalt-instance-url",
+      "https://cobalt.nichind.dev"
+    );
+    const cobaltVideoCodec = await storage.get("cobalt-video-codec", "h264");
+    const cobaltVideoContainer = await storage.get(
+      "cobalt-video-container",
+      "auto"
+    );
+    const cobaltFilenameStyle = await storage.get(
+      "cobalt-filename-style",
+      "basic"
+    );
+    const cobaltPreferredDubLang = await storage.get(
+      "cobalt-preferred-dub-lang",
+      ""
+    );
+    cobaltSettings.value = {
+      enabled: cobaltEnabled === "true",
+      instanceUrl: cobaltInstanceUrl,
+      videoCodec: cobaltVideoCodec,
+      videoContainer: cobaltVideoContainer,
+      filenameStyle: cobaltFilenameStyle,
+      preferredDubLang: cobaltPreferredDubLang
+    };
   }
   function openSaveChannelDialog(data) {
     saveChannelDialogData.value = { ...data, isOpen: true };
@@ -219,6 +253,7 @@
     closeDetailChannelDialog,
     closeSaveChannelDialog,
     closeSubtitleDialog,
+    cobaltSettings,
     currentTheme,
     deleteChannelDialogData,
     detailChannelDialogData,
@@ -661,6 +696,120 @@
         }
       }
       return 0;
+    }
+async getAudioTracks(videoId) {
+      try {
+        const response = await this.innerTubeRequest("/player", {
+          videoId
+        });
+        const videoTitle = response.videoDetails?.title || "video";
+        const captions = response.captions?.playerCaptionsTracklistRenderer;
+        const audioTracks = [];
+        if (captions?.audioTracks) {
+          captions.audioTracks.forEach((track, index2) => {
+            const trackId = track.audioTrackId || `track-${index2}`;
+            const langCode = trackId.split(".")[0];
+            const langNames = {
+              original: "original",
+              en: "English (en)",
+              es: "español (es)",
+              pt: "português (pt)",
+              fr: "français (fr)",
+              ru: "русский (ru)",
+              zh: "中文 (zh)",
+              vi: "Tiếng Việt (vi)",
+              hi: "हिन्दी (hi)",
+              bn: "বাংলা (bn)",
+              ja: "日本語 (ja)",
+              af: "Afrikaans (af)",
+              am: "አማርኛ (am)",
+              ar: "العربية (ar)",
+              as: "Assamese (as)",
+              az: "azərbaycan (az)",
+              be: "Belarusian (be)",
+              bg: "български (bg)",
+              bs: "bosanski (bs)",
+              ca: "català (ca)",
+              cs: "čeština (cs)",
+              da: "dansk (da)",
+              de: "Deutsch (de)",
+              el: "Ελληνικά (el)",
+              et: "eesti (et)",
+              eu: "Basque (eu)",
+              fa: "فارسی (fa)",
+              fi: "suomi (fi)",
+              fil: "Filipino (fil)",
+              gl: "Galician (gl)",
+              gu: "ગુજરાતી (gu)",
+              hr: "hrvatski (hr)",
+              hu: "magyar (hu)",
+              hy: "Armenian (hy)",
+              id: "Indonesia (id)",
+              is: "Icelandic (is)",
+              it: "italiano (it)",
+              iw: "עברית (iw)",
+              ka: "Georgian (ka)",
+              kk: "Kazakh (kk)",
+              ko: "한국어 (ko)",
+              km: "Khmer (km)",
+              kn: "ಕನ್ನಡ (kn)",
+              ky: "Kyrgyz (ky)",
+              lo: "Lao (lo)",
+              lt: "lietuvių (lt)",
+              lv: "latviešu (lv)",
+              mk: "Macedonian (mk)",
+              ml: "മലയാളം (ml)",
+              mn: "Mongolian (mn)",
+              mr: "मराठी (mr)",
+              ms: "Melayu (ms)",
+              my: "Burmese (my)",
+              no: "norsk (no)",
+              ne: "Nepali (ne)",
+              nl: "Nederlands (nl)",
+              or: "Odia (or)",
+              pa: "ਪੰਜਾਬੀ (pa)",
+              pl: "polski (pl)",
+              ro: "română (ro)",
+              si: "Sinhala (si)",
+              sk: "slovenčina (sk)",
+              sl: "slovenščina (sl)",
+              sq: "Albanian (sq)",
+              sr: "српски (sr)",
+              sv: "svenska (sv)",
+              sw: "Kiswahili (sw)",
+              ta: "தமிழ் (ta)",
+              te: "తెలుగు (te)",
+              th: "ไทย (th)",
+              tr: "Türkçe (tr)",
+              uk: "українська (uk)",
+              ur: "اردو (ur)",
+              uz: "o'zbek (uz)",
+              "zh-Hans": "简体中文 (zh-Hans)",
+              "zh-Hant": "繁體中文 (zh-Hant)",
+              "zh-CN": "中文（中国） (zh-CN)",
+              "zh-HK": "中文（香港） (zh-HK)",
+              "zh-TW": "中文（台灣） (zh-TW)",
+              zu: "Zulu (zu)"
+            };
+            const displayName = langNames[langCode] || `${langCode.toUpperCase()} (${langCode})`;
+            const isDefault = index2 === (captions.defaultAudioTrackIndex || 0);
+            audioTracks.push({
+              id: trackId,
+              displayName,
+              languageCode: langCode,
+              audioIsDefault: isDefault
+            });
+          });
+        }
+        return {
+          videoId,
+          videoTitle,
+          audioTracks
+        };
+      } catch (error) {
+        console.error("[YouTube] Error getting audio tracks:", error);
+        return null;
+      }
     }
 async getSubtitles(videoId) {
       try {
@@ -3471,7 +3620,7 @@ u(
     "Content-Type": "application/json",
     Origin: "https://iframe.y2meta-uk.com",
     Accept: "*/*",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
   };
   function DDLTab() {
     const [youtubeService2] = hooks.useState(() => new YouTubeService());
@@ -3732,6 +3881,10 @@ download: {
         setFailedDownloads( new Set());
         setTotalDownloadedSize(0);
         setCompletedDownloads(0);
+        setSuccessfulDownloads(0);
+        setSuccessfulVideoIds( new Set());
+        setBulkDownloadCompleted(false);
+        setShowFailedVideos(false);
       }
     };
     const fetchVideos = async (tabType) => {
@@ -3990,7 +4143,7 @@ download: {
               url: apiDownloadInfo.url,
               responseType: "blob",
               headers: {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
                 Referer: "https://iframe.y2meta-uk.com/",
                 Accept: "*/*"
               },
@@ -4154,6 +4307,7 @@ download: {
         const currentHandle = youtubeService2.getChannelHandleFromURL();
         if (currentHandle !== youtubeService2.getChannelHandle()) {
           youtubeService2.clearCache();
+          setChannelId(null);
           loadChannelInfo();
         }
         if (isWatchPage()) {
@@ -4734,6 +4888,1485 @@ u(
       ] }) })
     ] });
   }
+  class CobaltService {
+    instanceUrl;
+    constructor(instanceUrl = "https://cobalt.nichind.dev") {
+      this.instanceUrl = instanceUrl.replace(/\/$/, "");
+    }
+    setInstanceUrl(url) {
+      this.instanceUrl = url.replace(/\/$/, "");
+    }
+    async process(options2) {
+      return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+          method: "POST",
+          url: `${this.instanceUrl}/`,
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json"
+          },
+          data: JSON.stringify(options2),
+          onload: (response) => {
+            if (response.status === 200) {
+              try {
+                const data = JSON.parse(response.responseText);
+                resolve(data);
+              } catch (error) {
+                reject(new Error("Failed to parse response"));
+              }
+            } else {
+              reject(
+                new Error(
+                  `Cobalt API error: ${response.status} ${response.statusText}`
+                )
+              );
+            }
+          },
+          onerror: () => reject(new Error("Network error")),
+          ontimeout: () => reject(new Error("Request timeout"))
+        });
+      });
+    }
+    async getInstanceInfo() {
+      return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+          method: "GET",
+          url: `${this.instanceUrl}/`,
+          headers: {
+            Accept: "application/json"
+          },
+          onload: (response) => {
+            if (response.status === 200) {
+              try {
+                const data = JSON.parse(response.responseText);
+                resolve(data);
+              } catch (error) {
+                reject(new Error("Failed to parse response"));
+              }
+            } else {
+              reject(
+                new Error(`Failed to get instance info: ${response.status}`)
+              );
+            }
+          },
+          onerror: () => reject(new Error("Network error")),
+          ontimeout: () => reject(new Error("Request timeout"))
+        });
+      });
+    }
+    async downloadFile(url, filename, onProgress) {
+      return new Promise((resolve, reject) => {
+        const isHttps = url.toLowerCase().startsWith("https://");
+        const finalUrl = isHttps ? url : `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`;
+        GM_xmlhttpRequest({
+          method: "GET",
+          url: finalUrl,
+          responseType: "blob",
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+            Accept: "*/*"
+          },
+          onprogress: (progress) => {
+            if (onProgress) {
+              onProgress(
+                progress.loaded || 0,
+                progress.lengthComputable ? progress.total : 0
+              );
+            }
+          },
+          onload: (response) => {
+            if (response.status === 200 && response.response) {
+              const blob = response.response;
+              if (blob.size === 0) {
+                reject(new Error("Downloaded file is 0 bytes"));
+                return;
+              }
+              const blobUrl = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = blobUrl;
+              a.download = filename;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(blobUrl);
+              resolve();
+            } else if (response.status === 204) {
+              const a = document.createElement("a");
+              a.href = finalUrl;
+              a.download = filename;
+              a.style.display = "none";
+              a.target = "_self";
+              document.body.appendChild(a);
+              a.click();
+              setTimeout(() => {
+                document.body.removeChild(a);
+              }, 100);
+              resolve();
+            } else {
+              reject(new Error(`Download failed: ${response.status}`));
+            }
+          },
+          onerror: () => reject(new Error("Download failed")),
+          ontimeout: () => reject(new Error("Download timeout"))
+        });
+      });
+    }
+  }
+  function CobaltTab() {
+    const [youtubeService2] = hooks.useState(() => new YouTubeService());
+    const [cobaltService] = hooks.useState(
+      () => new CobaltService(cobaltSettings.value.instanceUrl)
+    );
+    hooks.useEffect(() => {
+      cobaltService.setInstanceUrl(cobaltSettings.value.instanceUrl);
+    }, [cobaltSettings.value.instanceUrl, cobaltService]);
+    const [channelId, setChannelId] = hooks.useState(null);
+    const [activeContentTab, setActiveContentTab] = hooks.useState("videos");
+    const [format, setFormat] = hooks.useState("video");
+    const [quality, setQuality] = hooks.useState("1080");
+    const [audioBitrate, setAudioBitrate] = hooks.useState("320");
+    const [currentVideoId, setCurrentVideoId] = hooks.useState(null);
+    const [currentVideoTitle, setCurrentVideoTitle] = hooks.useState("");
+    const [currentVideoDuration, setCurrentVideoDuration] = hooks.useState("");
+    const [currentVideoViews, setCurrentVideoViews] = hooks.useState("");
+    const [loadingVideoInfo, setLoadingVideoInfo] = hooks.useState(false);
+    const [audioTracks, setAudioTracks] = hooks.useState([]);
+    const [selectedDubLang, setSelectedDubLang] = hooks.useState("");
+    const [loadingAudioTracks, setLoadingAudioTracks] = hooks.useState(false);
+    const [loadingSubtitles, setLoadingSubtitles] = hooks.useState(false);
+    const [subtitleVideoId, setSubtitleVideoId] = hooks.useState(null);
+    const [errorMessage, setErrorMessage] = hooks.useState("");
+    const [videosCache, setVideosCache] = hooks.useState({
+      videos: [],
+      shorts: [],
+      live: []
+    });
+    const [loadingCache, setLoadingCache] = hooks.useState({
+      videos: false,
+      shorts: false,
+      live: false
+    });
+    const [currentPageCache, setCurrentPageCache] = hooks.useState({
+      videos: 1,
+      shorts: 1,
+      live: 1
+    });
+    const [downloadingIds, setDownloadingIds] = hooks.useState( new Set());
+    const [downloadProgress, setDownloadProgress] = hooks.useState({});
+    const [selectedVideoIds, setSelectedVideoIds] = hooks.useState(
+new Set()
+    );
+    const [downloadQueue, setDownloadQueue] = hooks.useState([]);
+    const [isProcessingQueue, setIsProcessingQueue] = hooks.useState(false);
+    const [failedDownloads, setFailedDownloads] = hooks.useState(
+new Set()
+    );
+    const [totalDownloadedSize, setTotalDownloadedSize] = hooks.useState(0);
+    const [completedDownloads, setCompletedDownloads] = hooks.useState(0);
+    const [showFailedVideos, setShowFailedVideos] = hooks.useState(false);
+    const [bulkDownloadCompleted, setBulkDownloadCompleted] = hooks.useState(false);
+    const [successfulDownloads, setSuccessfulDownloads] = hooks.useState(0);
+    const [successfulVideoIds, setSuccessfulVideoIds] = hooks.useState(
+new Set()
+    );
+    const [videosPerPage, setVideosPerPage] = hooks.useState(8);
+    const [abortControllers, setAbortControllers] = hooks.useState({
+      videos: null,
+      shorts: null,
+      live: null
+    });
+    const formatBytes = (bytes) => {
+      if (bytes === 0) return "0 B";
+      const k = 1024;
+      const sizes = ["B", "KB", "MB", "GB"];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+    };
+    const videos = videosCache[activeContentTab];
+    const loading = loadingCache[activeContentTab];
+    const currentPage = currentPageCache[activeContentTab];
+    const getAvailableQualities = () => {
+      const codec = cobaltSettings.value.videoCodec;
+      if (codec === "h264") {
+        return ["144", "240", "360", "480", "720", "1080"];
+      }
+      if (codec === "vp9") {
+        return ["144", "240", "360", "480", "720", "1080", "1440", "2160"];
+      }
+      if (codec === "av1") {
+        return [
+          "144",
+          "240",
+          "360",
+          "480",
+          "720",
+          "1080",
+          "1440",
+          "2160",
+          "4320"
+        ];
+      }
+      return ["144", "240", "360", "480", "720", "1080"];
+    };
+    const audioQualities = ["128", "256", "320"];
+    const isChannelPage = () => {
+      const path = window.location.pathname;
+      return path.startsWith("/@") || path.startsWith("/channel/");
+    };
+    const isWatchPage = () => {
+      const path = window.location.pathname;
+      return path === "/watch" || path.startsWith("/shorts/");
+    };
+    const getVideoIdFromUrl = () => {
+      const path = window.location.pathname;
+      if (path.startsWith("/shorts/")) {
+        return path.split("/shorts/")[1]?.split("?")[0] || null;
+      }
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get("v");
+    };
+    const getVideoTitle2 = () => {
+      let titleElement = document.querySelector(
+        "h1.ytd-watch-metadata yt-formatted-string"
+      );
+      if (!titleElement) {
+        titleElement = document.querySelector("h2.reel-video-in-sequence-title");
+      }
+      if (!titleElement) {
+        titleElement = document.querySelector("#shorts-player h2");
+      }
+      return titleElement?.textContent?.trim() || "video";
+    };
+    const fetchVideoInfo = async (videoId) => {
+      setLoadingVideoInfo(true);
+      try {
+        const response = await innerTubeRequest("/youtubei/v1/player", {
+          videoId
+        });
+        const title = response.videoDetails?.title;
+        if (title) {
+          setCurrentVideoTitle(title);
+        }
+        const lengthSeconds = response.videoDetails?.lengthSeconds;
+        if (lengthSeconds) {
+          const duration = formatDuration(parseInt(lengthSeconds));
+          setCurrentVideoDuration(duration);
+        }
+        const viewCount = response.videoDetails?.viewCount;
+        if (viewCount) {
+          setCurrentVideoViews(formatViews(parseInt(viewCount)));
+        }
+      } catch (error) {
+        console.error("[Cobalt] Error fetching video info:", error);
+      } finally {
+        setLoadingVideoInfo(false);
+      }
+    };
+    const formatDuration = (seconds) => {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor(seconds % 3600 / 60);
+      const secs = seconds % 60;
+      if (hours > 0) {
+        return `${hours}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+      }
+      return `${minutes}:${secs.toString().padStart(2, "0")}`;
+    };
+    const formatViews = (views) => {
+      if (views >= 1e9) {
+        return `${(views / 1e9).toFixed(1)}B views`;
+      }
+      if (views >= 1e6) {
+        return `${(views / 1e6).toFixed(1)}M views`;
+      }
+      if (views >= 1e3) {
+        return `${(views / 1e3).toFixed(1)}K views`;
+      }
+      return `${views} views`;
+    };
+    const fetchAudioTracks = async (videoId) => {
+      setLoadingAudioTracks(true);
+      try {
+        const result = await youtubeService2.getAudioTracks(videoId);
+        if (result && result.audioTracks.length > 0) {
+          const filteredTracks = result.audioTracks.filter(
+            (track) => !track.languageCode.startsWith("track-")
+          );
+          if (filteredTracks.length > 0) {
+            setAudioTracks(filteredTracks);
+            const preferredLang = cobaltSettings.value.preferredDubLang;
+            if (preferredLang) {
+              const preferredTrack = filteredTracks.find(
+                (t) => t.languageCode === preferredLang
+              );
+              if (preferredTrack) {
+                setSelectedDubLang(preferredLang);
+              } else {
+                setSelectedDubLang("");
+              }
+            } else {
+              setSelectedDubLang("");
+            }
+          } else {
+            setAudioTracks([]);
+            setSelectedDubLang("");
+          }
+        } else {
+          setAudioTracks([]);
+          setSelectedDubLang("");
+        }
+      } catch (error) {
+        console.error("[Cobalt] Error fetching audio tracks:", error);
+        setAudioTracks([]);
+        setSelectedDubLang("");
+      } finally {
+        setLoadingAudioTracks(false);
+      }
+    };
+    const fetchSubtitlesForDialog = async (videoId) => {
+      setLoadingSubtitles(true);
+      setSubtitleVideoId(videoId);
+      try {
+        const result = await youtubeService2.getSubtitles(videoId);
+        if (!result) {
+          throw new Error("Failed to fetch subtitles from YouTube");
+        }
+        let videoTitle = result.videoTitle || currentVideoTitle || "video";
+        if (videoTitle === "video" || videoTitle === "Loading...") {
+          for (const type of ["videos", "shorts", "live"]) {
+            const video = videosCache[type].find(
+              (v) => v.videoId === videoId
+            );
+            if (video) {
+              videoTitle = video.title;
+              break;
+            }
+          }
+        }
+        if (result.subtitles.length === 0 && result.autoTransSubtitles.length === 0) {
+          throw new Error("No subtitles available for this video");
+        }
+        const processedSubtitles = result.subtitles.map((sub) => {
+          let downloadUrl = sub.url;
+          if (!downloadUrl.includes("fmt=")) {
+            downloadUrl += "&fmt=srv1";
+          }
+          return {
+            name: sub.name,
+            code: sub.languageCode,
+            url: downloadUrl,
+            isAutoGenerated: sub.isAutoGenerated,
+            download: {
+              srt: downloadUrl,
+              txt: downloadUrl,
+              raw: downloadUrl
+            }
+          };
+        });
+        const baseTrack = result.subtitles[0];
+        const processedAutoTrans = result.autoTransSubtitles.map((sub) => {
+          const translatedUrl = baseTrack ? `${baseTrack.url}&tlang=${sub.languageCode}&fmt=srv1` : "";
+          return {
+            name: sub.name,
+            code: sub.languageCode,
+            url: translatedUrl,
+            isAutoGenerated: true,
+            download: {
+              srt: translatedUrl,
+              txt: translatedUrl,
+              raw: translatedUrl
+            }
+          };
+        });
+        openSubtitleDialog({
+          videoId,
+          videoTitle,
+          subtitles: processedSubtitles,
+          autoTransSubtitles: processedAutoTrans
+        });
+      } catch (error) {
+        console.error("[Cobalt] Error fetching subtitles:", error);
+        playErrorSound();
+        setErrorMessage(
+          error instanceof Error ? error.message : "Failed to fetch subtitles"
+        );
+        setTimeout(() => setErrorMessage(""), 3e3);
+      } finally {
+        setLoadingSubtitles(false);
+        setSubtitleVideoId(null);
+      }
+    };
+    const loadChannelInfo = async () => {
+      if (activeTab.value !== "ddl") {
+        return;
+      }
+      if (isWatchPage()) {
+        const videoId = getVideoIdFromUrl();
+        if (videoId !== currentVideoId) {
+          setCurrentVideoId(videoId);
+          const title = getVideoTitle2();
+          if (title && title !== "video") {
+            setCurrentVideoTitle(title);
+          } else {
+            setCurrentVideoTitle("Loading...");
+          }
+          setCurrentVideoDuration("");
+          setCurrentVideoViews("");
+          if (videoId && isPanelVisible.value) {
+            fetchVideoInfo(videoId);
+            fetchAudioTracks(videoId);
+          }
+        } else if (videoId && !currentVideoTitle) {
+          const title = getVideoTitle2();
+          if (title && title !== "video") {
+            setCurrentVideoTitle(title);
+          }
+        }
+        setChannelId(null);
+        return;
+      }
+      if (!isChannelPage()) {
+        setChannelId(null);
+        setCurrentVideoId(null);
+        setVideosCache({ videos: [], shorts: [], live: [] });
+        setLoadingCache({ videos: false, shorts: false, live: false });
+        setCurrentPageCache({ videos: 1, shorts: 1, live: 1 });
+        return;
+      }
+      const id = await youtubeService2.getChannelId();
+      if (id !== channelId) {
+        setChannelId(id);
+        setCurrentVideoId(null);
+        setVideosCache({ videos: [], shorts: [], live: [] });
+        setLoadingCache({ videos: false, shorts: false, live: false });
+        setCurrentPageCache({ videos: 1, shorts: 1, live: 1 });
+        setSelectedVideoIds( new Set());
+        setDownloadQueue([]);
+        setIsProcessingQueue(false);
+        setFailedDownloads( new Set());
+        setTotalDownloadedSize(0);
+        setCompletedDownloads(0);
+        setSuccessfulDownloads(0);
+        setSuccessfulVideoIds( new Set());
+        setBulkDownloadCompleted(false);
+        setShowFailedVideos(false);
+        if (isPanelVisible.value && isChannelPage() && id) {
+          setTimeout(() => {
+            fetchVideos("videos", id);
+            fetchVideos("shorts", id);
+            fetchVideos("live", id);
+          }, 100);
+        }
+      }
+    };
+    const fetchVideos = async (tabType, forceChannelId) => {
+      const targetChannelId = forceChannelId || channelId;
+      if (!targetChannelId) return;
+      if (abortControllers[tabType]) {
+        abortControllers[tabType].abort();
+      }
+      const controller = new AbortController();
+      setAbortControllers((prev) => ({ ...prev, [tabType]: controller }));
+      setLoadingCache((prev) => ({ ...prev, [tabType]: true }));
+      try {
+        const allVideos = [];
+        let continuation = void 0;
+        let pageCount = 0;
+        const maxPages = 100;
+        const TAB_TYPE_PARAMS2 = {
+          videos: "EgZ2aWRlb3PyBgQKAjoA",
+          shorts: "EgZzaG9ydHPyBgUKA5oBAA%3D%3D",
+          live: "EgdzdHJlYW1z8gYECgJ6AA%3D%3D"
+        };
+        do {
+          if (controller.signal.aborted) {
+            break;
+          }
+          if (activeTab.value !== "ddl" || !isPanelVisible.value) {
+            break;
+          }
+          const params = TAB_TYPE_PARAMS2[tabType];
+          const response = await innerTubeRequest(
+            "/youtubei/v1/browse",
+            {
+              browseId: targetChannelId,
+              params,
+              continuation
+            },
+            controller.signal
+          );
+          const items = parseTabData(tabType, response);
+          const parsedVideos = parseVideos(items, tabType);
+          allVideos.push(...parsedVideos);
+          const filteredVideos = tabType === "live" ? allVideos.filter((v) => v.duration && v.duration !== "0:00") : allVideos;
+          setVideosCache((prev) => ({ ...prev, [tabType]: filteredVideos }));
+          continuation = getContinuation(response, tabType);
+          pageCount++;
+          if (!continuation || pageCount >= maxPages) break;
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        } while (continuation);
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          console.error("[Cobalt] Error fetching videos:", error);
+        }
+      } finally {
+        setLoadingCache((prev) => ({ ...prev, [tabType]: false }));
+        setAbortControllers((prev) => ({ ...prev, [tabType]: null }));
+      }
+    };
+    const innerTubeRequest = async (endpoint, data, signal2) => {
+      const INNERTUBE_API_KEY2 = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
+      const url = `https://www.youtube.com${endpoint}?key=${INNERTUBE_API_KEY2}&prettyPrint=false`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-YouTube-Client-Name": "1",
+          "X-YouTube-Client-Version": "2.20201209.01.00"
+        },
+        body: JSON.stringify({
+          context: {
+            client: {
+              clientName: "WEB",
+              clientVersion: "2.20201209.01.00",
+              hl: "en",
+              gl: "US"
+            }
+          },
+          ...data
+        }),
+        signal: signal2
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      return await response.json();
+    };
+    const getContinuation = (data, tabType) => {
+      const TAB_TYPE_PARAMS2 = {
+        videos: "EgZ2aWRlb3PyBgQKAjoA",
+        shorts: "EgZzaG9ydHPyBgUKA5oBAA%3D%3D",
+        live: "EgdzdHJlYW1z8gYECgJ6AA%3D%3D"
+      };
+      if (tabType === "shorts") {
+        const tab2 = data.contents?.twoColumnBrowseResultsRenderer?.tabs?.find(
+          (t) => t.tabRenderer?.endpoint?.browseEndpoint?.params === TAB_TYPE_PARAMS2[tabType]
+        );
+        const contents = tab2?.tabRenderer?.content?.richGridRenderer?.contents || [];
+        const continuationItem = contents.find(
+          (c) => c.continuationItemRenderer
+        );
+        if (continuationItem) {
+          return continuationItem.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token;
+        }
+        const continuationItems = data.onResponseReceivedActions?.[0]?.appendContinuationItemsAction?.continuationItems || data.onResponseReceivedEndpoints?.[0]?.appendContinuationItemsAction?.continuationItems || [];
+        const contItem = continuationItems.find(
+          (c) => c.continuationItemRenderer
+        );
+        if (contItem) {
+          return contItem.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token;
+        }
+        return void 0;
+      }
+      const tab = data.contents?.twoColumnBrowseResultsRenderer?.tabs?.find(
+        (t) => t.tabRenderer?.endpoint?.browseEndpoint?.params === TAB_TYPE_PARAMS2[tabType]
+      );
+      const items = tab?.tabRenderer?.content?.richGridRenderer?.contents || data.onResponseReceivedActions?.[0]?.appendContinuationItemsAction?.continuationItems || data.onResponseReceivedEndpoints?.[0]?.appendContinuationItemsAction?.continuationItems || [];
+      const continuation = items[items.length - 1];
+      const renderer = continuation?.continuationItemRenderer;
+      if (!renderer) return void 0;
+      return renderer?.continuationEndpoint?.continuationCommand?.token;
+    };
+    const parseTabData = (tabType, data) => {
+      const TAB_TYPE_PARAMS2 = {
+        videos: "EgZ2aWRlb3PyBgQKAjoA",
+        shorts: "EgZzaG9ydHPyBgUKA5oBAA%3D%3D",
+        live: "EgdzdHJlYW1z8gYECgJ6AA%3D%3D"
+      };
+      const tab = data.contents?.twoColumnBrowseResultsRenderer?.tabs?.find(
+        (t) => t.tabRenderer?.endpoint?.browseEndpoint?.params === TAB_TYPE_PARAMS2[tabType]
+      );
+      if (tabType === "shorts" && tab?.tabRenderer?.content?.richGridRenderer) {
+        const contents = tab.tabRenderer.content.richGridRenderer.contents || [];
+        return contents.map((c) => c.richItemRenderer?.content || c).filter((c) => c.shortsLockupViewModel || c.reelItemRenderer);
+      }
+      if (tabType === "shorts" && (data.onResponseReceivedActions || data.onResponseReceivedEndpoints)) {
+        const continuationItems = data.onResponseReceivedActions?.[0]?.appendContinuationItemsAction?.continuationItems || data.onResponseReceivedEndpoints?.[0]?.appendContinuationItemsAction?.continuationItems || [];
+        return continuationItems.map((c) => c.richItemRenderer?.content || c).filter((c) => c.shortsLockupViewModel || c.reelItemRenderer);
+      }
+      if (tab?.tabRenderer?.content?.richGridRenderer?.contents) {
+        const contents = tab.tabRenderer.content.richGridRenderer.contents;
+        return contents.map((c) => c.richItemRenderer?.content || c);
+      }
+      if (data.onResponseReceivedActions?.[0]?.appendContinuationItemsAction?.continuationItems) {
+        const items = data.onResponseReceivedActions[0].appendContinuationItemsAction.continuationItems;
+        return items.map((c) => c.richItemRenderer?.content || c);
+      }
+      if (data.onResponseReceivedEndpoints?.[0]?.appendContinuationItemsAction?.continuationItems) {
+        const items = data.onResponseReceivedEndpoints[0].appendContinuationItemsAction.continuationItems;
+        return items;
+      }
+      return [];
+    };
+    const parseVideos = (items, tabType) => {
+      if (tabType === "shorts") {
+        return items.filter((item) => item.shortsLockupViewModel || item.reelItemRenderer).map((item) => {
+          const lockup = item.shortsLockupViewModel;
+          if (lockup) {
+            const videoId = lockup.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId;
+            const title = lockup.overlayMetadata?.primaryText?.content || "Untitled";
+            return {
+              videoId,
+              title,
+              thumbnail: `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`
+            };
+          }
+          const renderer = item.reelItemRenderer;
+          return {
+            videoId: renderer.videoId,
+            title: renderer.headline?.simpleText || "Untitled",
+            thumbnail: `https://i.ytimg.com/vi/${renderer.videoId}/mqdefault.jpg`
+          };
+        }).filter((v) => v.videoId);
+      }
+      return items.filter((item) => item.videoRenderer).map((item) => {
+        const renderer = item.videoRenderer;
+        return {
+          videoId: renderer.videoId,
+          title: renderer.title?.runs?.[0]?.text || renderer.title?.simpleText || "Untitled",
+          thumbnail: renderer.thumbnail?.thumbnails?.[0]?.url || `https://i.ytimg.com/vi/${renderer.videoId}/mqdefault.jpg`,
+          duration: renderer.lengthText?.simpleText || "",
+          publishedTime: renderer.publishedTimeText?.simpleText || ""
+        };
+      }).filter((v) => v.videoId);
+    };
+    const downloadVideo = async (videoId, title) => {
+      setDownloadingIds((prev) => new Set(prev).add(videoId));
+      try {
+        const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        const options2 = {
+          url: videoUrl
+        };
+        if (format === "video" && selectedDubLang) {
+          options2.youtubeDubLang = selectedDubLang;
+        }
+        if (format === "video") {
+          if (quality !== "1080") {
+            options2.videoQuality = String(quality);
+          }
+          if (cobaltSettings.value.videoCodec !== "h264") {
+            options2.youtubeVideoCodec = cobaltSettings.value.videoCodec;
+          }
+          if (cobaltSettings.value.videoContainer !== "auto") {
+            options2.youtubeVideoContainer = cobaltSettings.value.videoContainer;
+          }
+        } else {
+          options2.downloadMode = "audio";
+          options2.audioFormat = "mp3";
+          if (audioBitrate !== "128") {
+            options2.audioBitrate = String(audioBitrate);
+          }
+        }
+        options2.filenameStyle = cobaltSettings.value.filenameStyle;
+        const response = await cobaltService.process(options2);
+        if (response.status === "error") {
+          console.error("[Cobalt] Error details:", response.error);
+          throw new Error(
+            `${response.error.code}${response.error.context ? ` - ${JSON.stringify(response.error.context)}` : ""}`
+          );
+        }
+        if (response.status === "tunnel" || response.status === "redirect") {
+          const proxyUrl = `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(
+          response.url
+        )}`;
+          await new Promise((resolve, reject) => {
+            GM_xmlhttpRequest({
+              method: "GET",
+              url: proxyUrl,
+              responseType: "blob",
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+                Referer: "https://www.youtube.com/",
+                Accept: "*/*"
+              },
+              onprogress: (progress) => {
+                setDownloadProgress((prev) => ({
+                  ...prev,
+                  [videoId]: {
+                    loaded: progress.loaded || 0,
+                    total: progress.lengthComputable ? progress.total : 0
+                  }
+                }));
+              },
+              onload: (downloadResponse) => {
+                if (downloadResponse.status === 204) {
+                  resolve();
+                  return;
+                }
+                if (downloadResponse.status === 200 && downloadResponse.response) {
+                  const blob = downloadResponse.response;
+                  if (blob.size === 0) {
+                    reject(new Error("Downloaded file is 0 bytes"));
+                    return;
+                  }
+                  const blobUrl = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = blobUrl;
+                  a.download = sanitizeFilename(response.filename);
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(blobUrl);
+                  setFailedDownloads((prev) => {
+                    const newSet = new Set(prev);
+                    newSet.delete(videoId);
+                    return newSet;
+                  });
+                  setTotalDownloadedSize((prev) => prev + blob.size);
+                  setCompletedDownloads((prev) => prev + 1);
+                  setSuccessfulDownloads((prev) => prev + 1);
+                  setSuccessfulVideoIds((prev) => new Set(prev).add(videoId));
+                  resolve();
+                } else {
+                  reject(
+                    new Error(`Blob download failed: ${downloadResponse.status}`)
+                  );
+                }
+              },
+              onerror: () => reject(new Error("Blob download failed")),
+              ontimeout: () => reject(new Error("Blob download timeout"))
+            });
+          });
+        }
+      } catch (error) {
+        console.error("[Cobalt] Download error:", error);
+        playErrorSound();
+        setErrorMessage(`Failed to download: ${error}`);
+        setTimeout(() => setErrorMessage(""), 1e3);
+        setFailedDownloads((prev) => new Set(prev).add(videoId));
+      } finally {
+        setDownloadingIds((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(videoId);
+          return newSet;
+        });
+        setDownloadProgress((prev) => {
+          const newProgress = { ...prev };
+          delete newProgress[videoId];
+          return newProgress;
+        });
+      }
+    };
+    const processDownloadQueue = async () => {
+      if (isProcessingQueue || downloadQueue.length === 0) return;
+      setIsProcessingQueue(true);
+      for (const videoId of downloadQueue) {
+        let video;
+        for (const type of ["videos", "shorts", "live"]) {
+          video = videosCache[type].find((v) => v.videoId === videoId);
+          if (video) break;
+        }
+        if (video) {
+          await downloadVideo(videoId, video.title);
+          await new Promise((resolve) => setTimeout(resolve, 1e3));
+        }
+      }
+      setDownloadQueue([]);
+      setIsProcessingQueue(false);
+      setBulkDownloadCompleted(true);
+    };
+    const retryFailedDownloads = () => {
+      const failedIds = Array.from(failedDownloads);
+      setDownloadQueue(failedIds);
+      setTotalDownloadedSize(0);
+      setCompletedDownloads(0);
+      setSuccessfulDownloads(0);
+      setBulkDownloadCompleted(false);
+    };
+    const clearFailedDownloads = () => {
+      setFailedDownloads( new Set());
+      setBulkDownloadCompleted(false);
+      setShowFailedVideos(false);
+      setSelectedVideoIds( new Set());
+      setTotalDownloadedSize(0);
+      setCompletedDownloads(0);
+      setSuccessfulDownloads(0);
+      setSuccessfulVideoIds( new Set());
+    };
+    const startBulkDownload = () => {
+      const selectedIds = Array.from(selectedVideoIds);
+      setDownloadQueue(selectedIds);
+      setTotalDownloadedSize(0);
+      setCompletedDownloads(0);
+      setSuccessfulDownloads(0);
+      setBulkDownloadCompleted(false);
+      setShowFailedVideos(false);
+      setFailedDownloads( new Set());
+      setSuccessfulVideoIds( new Set());
+    };
+    const toggleVideoSelection = (videoId) => {
+      setSelectedVideoIds((prev) => {
+        const newSet = new Set(prev);
+        if (newSet.has(videoId)) {
+          newSet.delete(videoId);
+        } else {
+          newSet.add(videoId);
+        }
+        return newSet;
+      });
+    };
+    const toggleSelectAll = (allVideos) => {
+      const allSelected = allVideos.every(
+        (v) => selectedVideoIds.has(v.videoId)
+      );
+      setSelectedVideoIds((prev) => {
+        const newSet = new Set(prev);
+        allVideos.forEach((v) => {
+          if (allSelected) {
+            newSet.delete(v.videoId);
+          } else {
+            newSet.add(v.videoId);
+          }
+        });
+        return newSet;
+      });
+    };
+    hooks.useEffect(() => {
+      if (downloadQueue.length > 0 && !isProcessingQueue) {
+        processDownloadQueue();
+      }
+    }, [downloadQueue]);
+    hooks.useEffect(() => {
+      if (activeTab.value !== "ddl") {
+        Object.values(abortControllers).forEach((controller) => {
+          if (controller) {
+            controller.abort();
+          }
+        });
+        return;
+      }
+      loadCobaltSettings();
+      loadChannelInfo();
+      loadPerPageSetting();
+      const checkUrlChange = () => {
+        const currentHandle = youtubeService2.getChannelHandleFromURL();
+        if (currentHandle !== youtubeService2.getChannelHandle()) {
+          youtubeService2.clearCache();
+          setChannelId(null);
+          loadChannelInfo();
+        }
+        if (isWatchPage()) {
+          const newVideoId = getVideoIdFromUrl();
+          if (newVideoId && newVideoId !== currentVideoId) {
+            setCurrentVideoId(newVideoId);
+            const domTitle = getVideoTitle2();
+            if (domTitle && domTitle !== "video") {
+              setCurrentVideoTitle(domTitle);
+            } else {
+              setCurrentVideoTitle("Loading...");
+            }
+            setCurrentVideoDuration("");
+            setCurrentVideoViews("");
+            if (isPanelVisible.value) {
+              fetchVideoInfo(newVideoId);
+              fetchAudioTracks(newVideoId);
+            }
+          } else if (newVideoId && currentVideoId === newVideoId) {
+            if (currentVideoTitle === "Loading..." || currentVideoTitle === "video") {
+              const newTitle = getVideoTitle2();
+              if (newTitle && newTitle !== "video") {
+                setCurrentVideoTitle(newTitle);
+              }
+            }
+          }
+        }
+      };
+      const handleSettingsUpdate = () => {
+        loadPerPageSetting();
+      };
+      window.addEventListener("settings-updated", handleSettingsUpdate);
+      const intervalId = setInterval(checkUrlChange, 1e3);
+      return () => {
+        clearInterval(intervalId);
+        window.removeEventListener("settings-updated", handleSettingsUpdate);
+        Object.values(abortControllers).forEach((controller) => {
+          if (controller) {
+            controller.abort();
+          }
+        });
+      };
+    }, [activeTab.value, currentVideoId, currentVideoTitle]);
+    const loadPerPageSetting = async () => {
+      const perPage = await storage.get("ddl-per-page", "8");
+      setVideosPerPage(parseInt(perPage));
+    };
+    const loadCobaltSettings = async () => {
+      const contentTab = await storage.get("ddl-contentTab", "videos");
+      setActiveContentTab(contentTab);
+      const fmt = await storage.get("ddl-format", "video");
+      setFormat(fmt);
+      const qual = await storage.get("ddl-videoQuality", "1080");
+      setQuality(qual);
+      const bitrate = await storage.get("ddl-audioBitrate", "320");
+      setAudioBitrate(bitrate);
+    };
+    hooks.useEffect(() => {
+      if (channelId && activeTab.value === "ddl" && isPanelVisible.value && isChannelPage()) {
+        if (videosCache.videos.length === 0 && !loadingCache.videos) {
+          fetchVideos("videos");
+        }
+        if (videosCache.shorts.length === 0 && !loadingCache.shorts) {
+          fetchVideos("shorts");
+        }
+        if (videosCache.live.length === 0 && !loadingCache.live) {
+          fetchVideos("live");
+        }
+      }
+    }, [channelId, activeTab.value, isPanelVisible.value]);
+    hooks.useEffect(() => {
+      if (activeTab.value === "ddl" && isPanelVisible.value && isWatchPage() && currentVideoId && !currentVideoDuration && !loadingVideoInfo) {
+        fetchVideoInfo(currentVideoId);
+        fetchAudioTracks(currentVideoId);
+      }
+    }, [
+      activeTab.value,
+      isPanelVisible.value,
+      currentVideoId,
+      currentVideoDuration,
+      loadingVideoInfo
+    ]);
+    hooks.useEffect(() => {
+      const availableQualities = getAvailableQualities();
+      if (!availableQualities.includes(quality)) {
+        const newQuality = availableQualities[availableQualities.length - 1] || "1080";
+        setQuality(newQuality);
+        storage.set("ddl-videoQuality", newQuality);
+      }
+    }, [cobaltSettings.value.videoCodec]);
+    if (isWatchPage() && currentVideoId) {
+      return u("div", { className: "space-y-4", children: [
+        errorMessage && u("div", { role: "alert", className: "alert alert-error alert-soft", children: [
+u(IconCircleX, { className: "size-6 shrink-0" }),
+u("span", { className: "text-xl", children: errorMessage })
+        ] }),
+u("div", { className: "bg-base-200 rounded-lg p-4 space-y-3", children: [
+u("div", { className: "flex gap-2", children: [
+u(
+              "button",
+              {
+                className: `btn btn-lg flex-1 ${format === "video" ? "btn-secondary" : "btn-ghost"}`,
+                onClick: () => {
+                  setFormat("video");
+                  storage.set("ddl-format", "video");
+                },
+                children: [
+u(IconVideo, { className: "size-[1.8em]" }),
+u("span", { className: "text-xl", children: "Video" })
+                ]
+              }
+            ),
+u(
+              "button",
+              {
+                className: `btn btn-lg flex-1 ${format === "audio" ? "btn-accent" : "btn-ghost"}`,
+                onClick: () => {
+                  setFormat("audio");
+                  storage.set("ddl-format", "audio");
+                },
+                children: [
+u(IconMusic, { className: "size-[1.8em]" }),
+u("span", { className: "text-xl", children: "Audio" })
+                ]
+              }
+            )
+          ] }),
+          format === "video" ? u("div", { className: "space-y-2", children: u(
+            "select",
+            {
+              className: "select select-bordered select-lg w-full text-xl",
+              value: quality,
+              onChange: (e) => {
+                const value = e.target.value;
+                setQuality(value);
+                storage.set("ddl-videoQuality", value);
+              },
+              children: getAvailableQualities().map((q2) => u("option", { value: q2, children: [
+                q2,
+                "p"
+              ] }, q2))
+            }
+          ) }) : u(
+            "select",
+            {
+              className: "select select-bordered select-lg w-full text-xl",
+              value: audioBitrate,
+              onChange: (e) => {
+                const value = e.target.value;
+                setAudioBitrate(value);
+                storage.set("ddl-audioBitrate", value);
+              },
+              children: audioQualities.map((q2) => u("option", { value: q2, children: [
+                q2,
+                " kbps"
+              ] }, q2))
+            }
+          ),
+          audioTracks.length > 0 && u("div", { className: "space-y-2", children: [
+u("label", { className: "text-xl font-medium block", children: "Dubbed Audio" }),
+u(
+              "select",
+              {
+                className: "select select-bordered select-lg w-full text-xl",
+                value: selectedDubLang,
+                onChange: (e) => {
+                  setSelectedDubLang(e.target.value);
+                },
+                children: [
+u("option", { value: "", children: "Original Audio" }),
+                  audioTracks.map((track) => u("option", { value: track.languageCode, children: [
+                    track.displayName,
+                    " ",
+                    track.audioIsDefault ? "(Default)" : ""
+                  ] }, track.languageCode))
+                ]
+              }
+            )
+          ] }),
+          loadingAudioTracks && u("div", { className: "flex items-center gap-2 text-lg opacity-60", children: [
+u("span", { className: "loading loading-spinner loading-sm" }),
+u("span", { children: "Loading audio tracks..." })
+          ] })
+        ] }),
+u("div", { className: "bg-base-200 rounded-lg p-4 space-y-3", children: [
+u("div", { className: "w-full", children: u("div", { className: "aspect-video rounded overflow-hidden relative", children: [
+u(
+              "img",
+              {
+                src: `https://i.ytimg.com/vi/${currentVideoId}/mqdefault.jpg`,
+                alt: currentVideoTitle,
+                className: "w-full h-full object-cover"
+              }
+            ),
+            currentVideoDuration && u("div", { className: "absolute bottom-2 right-2 bg-black bg-opacity-80 text-white px-2 py-1 rounded text-lg font-semibold", children: currentVideoDuration })
+          ] }) }),
+u("div", { className: "space-y-2", children: [
+u("h3", { className: "text-xl font-semibold line-clamp-2", children: currentVideoTitle || "Current Video" }),
+            loadingVideoInfo ? u("div", { className: "flex items-center gap-2", children: [
+u("span", { className: "loading loading-spinner loading-sm" }),
+u("span", { className: "text-lg opacity-60", children: "Loading info..." })
+            ] }) : currentVideoViews && u("p", { className: "text-lg opacity-60", children: currentVideoViews })
+          ] }),
+          downloadingIds.has(currentVideoId) && u("div", { className: "space-y-1", children: [
+u("progress", { className: "progress progress-primary w-full h-2" }),
+            downloadProgress[currentVideoId] && u("p", { className: "text-lg opacity-60 text-center", children: [
+              formatBytes(downloadProgress[currentVideoId].loaded),
+              downloadProgress[currentVideoId].total > 0 && ` / ${formatBytes(
+              downloadProgress[currentVideoId].total
+            )}`
+            ] })
+          ] }),
+          failedDownloads.has(currentVideoId) && u("div", { className: "flex justify-center", children: u("span", { className: "badge badge-error badge-lg", children: "Failed to download" }) }),
+u("div", { className: "flex gap-2", children: [
+u(
+              "button",
+              {
+                className: "btn btn-lg btn-secondary",
+                onClick: () => fetchSubtitlesForDialog(currentVideoId),
+                disabled: loadingSubtitles,
+                children: loadingSubtitles ? u("span", { className: "loading loading-spinner loading-md" }) : u(IconBadgeCc, { className: "size-[1.8em]" })
+              }
+            ),
+u(
+              "button",
+              {
+                className: "btn btn-lg btn-primary flex-1",
+                onClick: () => downloadVideo(currentVideoId),
+                disabled: downloadingIds.has(currentVideoId),
+                children: downloadingIds.has(currentVideoId) ? u(preact.Fragment, { children: [
+u("span", { className: "loading loading-spinner loading-md" }),
+u("span", { className: "text-xl", children: "Downloading..." })
+                ] }) : u(preact.Fragment, { children: [
+u(IconDownload, { className: "size-[1.8em]" }),
+u("span", { className: "text-xl", children: "Download" })
+                ] })
+              }
+            )
+          ] })
+        ] }),
+u("p", { className: "text-lg opacity-60 text-center", children: "Using Cobalt Instances" })
+      ] });
+    }
+    if (!isChannelPage()) {
+      return u("div", { className: "text-center py-8", children: u("p", { className: "text-xl opacity-60", children: "Navigate to a YouTube channel or video to download" }) });
+    }
+    if (!channelId) {
+      return u("div", { className: "text-center py-8", children: u("span", { className: "loading loading-spinner loading-lg" }) });
+    }
+    const totalPages = Math.ceil(videos.length / videosPerPage);
+    const startIndex = (currentPage - 1) * videosPerPage;
+    const endIndex = startIndex + videosPerPage;
+    const currentVideos = videos.slice(startIndex, endIndex);
+    return u("div", { className: "space-y-4", children: [
+      errorMessage && u("div", { role: "alert", className: "alert alert-error alert-soft", children: [
+u(IconCircleX, { className: "size-6 shrink-0" }),
+u("span", { className: "text-xl", children: errorMessage })
+      ] }),
+u("div", { className: "bg-base-200 rounded-lg p-4 space-y-3", children: [
+u("div", { className: "flex gap-2", children: [
+u(
+            "button",
+            {
+              className: `btn btn-lg flex-1 ${format === "video" ? "btn-secondary" : "btn-ghost"}`,
+              onClick: () => {
+                setFormat("video");
+                storage.set("ddl-format", "video");
+              },
+              children: [
+u(IconVideo, { className: "size-[1.8em]" }),
+u("span", { className: "text-xl", children: "Video" })
+              ]
+            }
+          ),
+u(
+            "button",
+            {
+              className: `btn btn-lg flex-1 ${format === "audio" ? "btn-accent" : "btn-ghost"}`,
+              onClick: () => {
+                setFormat("audio");
+                storage.set("ddl-format", "audio");
+              },
+              children: [
+u(IconMusic, { className: "size-[1.8em]" }),
+u("span", { className: "text-xl", children: "Audio" })
+              ]
+            }
+          )
+        ] }),
+        format === "video" ? u(
+          "select",
+          {
+            className: "select select-bordered select-lg w-full text-xl",
+            value: quality,
+            onChange: (e) => {
+              const value = e.target.value;
+              setQuality(value);
+              storage.set("ddl-videoQuality", value);
+            },
+            children: getAvailableQualities().map((q2) => u("option", { value: q2, children: [
+              q2,
+              "p"
+            ] }, q2))
+          }
+        ) : u(
+          "select",
+          {
+            className: "select select-bordered select-lg w-full text-xl",
+            value: audioBitrate,
+            onChange: (e) => {
+              const value = e.target.value;
+              setAudioBitrate(value);
+              storage.set("ddl-audioBitrate", value);
+            },
+            children: audioQualities.map((q2) => u("option", { value: q2, children: [
+              q2,
+              " kbps"
+            ] }, q2))
+          }
+        )
+      ] }),
+u("div", { role: "tablist", className: "tabs tabs-border bg-base-200 text-xl h-14", children: [
+u(
+          "button",
+          {
+            role: "tab",
+            className: `tab text-xl h-14 ${activeContentTab === "videos" ? "tab-active" : ""}`,
+            onClick: () => {
+              setActiveContentTab("videos");
+              storage.set("ddl-contentTab", "videos");
+            },
+            children: [
+              "Videos",
+              " ",
+              videosCache.videos.length > 0 && `(${videosCache.videos.length.toLocaleString()})`
+            ]
+          }
+        ),
+u(
+          "button",
+          {
+            role: "tab",
+            className: `tab text-xl h-14 ${activeContentTab === "shorts" ? "tab-active" : ""}`,
+            onClick: () => {
+              setActiveContentTab("shorts");
+              storage.set("ddl-contentTab", "shorts");
+            },
+            children: [
+              "Shorts",
+              " ",
+              videosCache.shorts.length > 0 && `(${videosCache.shorts.length.toLocaleString()})`
+            ]
+          }
+        ),
+u(
+          "button",
+          {
+            role: "tab",
+            className: `tab text-xl h-14 ${activeContentTab === "live" ? "tab-active" : ""}`,
+            onClick: () => {
+              setActiveContentTab("live");
+              storage.set("ddl-contentTab", "live");
+            },
+            children: [
+              "Live",
+              " ",
+              videosCache.live.length > 0 && `(${videosCache.live.length.toLocaleString()})`
+            ]
+          }
+        )
+      ] }),
+      videos.length > 0 && u("div", { className: "space-y-3", children: [
+u("div", { className: "flex items-center justify-between gap-3", children: [
+u("label", { className: "flex items-center gap-2 cursor-pointer", children: [
+u(
+              "input",
+              {
+                type: "checkbox",
+                className: "checkbox checkbox-primary checkbox-lg",
+                checked: videos.length > 0 && videos.every((v) => selectedVideoIds.has(v.videoId)),
+                onChange: () => toggleSelectAll(videos)
+              }
+            ),
+u("span", { className: "text-xl", children: [
+              "Select All (",
+              videos.length.toLocaleString(),
+              ")"
+            ] })
+          ] }),
+          selectedVideoIds.size > 0 && u(
+            "button",
+            {
+              className: "btn btn-primary",
+              onClick: startBulkDownload,
+              disabled: isProcessingQueue,
+              children: isProcessingQueue ? u(preact.Fragment, { children: [
+u("span", { className: "loading loading-spinner loading-md" }),
+u("span", { children: "Downloading..." })
+              ] }) : u("span", { children: [
+                "Download (",
+                selectedVideoIds.size.toLocaleString(),
+                ")"
+              ] })
+            }
+          )
+        ] }),
+        isProcessingQueue && u("div", { className: "space-y-2", children: [
+u(
+            "progress",
+            {
+              className: "progress progress-primary w-full",
+              value: completedDownloads,
+              max: downloadQueue.length
+            }
+          ),
+u("div", { className: "flex items-center justify-between", children: [
+u("span", { className: "text-lg", children: formatBytes(totalDownloadedSize) }),
+u("span", { className: "text-lg", children: [
+              completedDownloads,
+              "/",
+              downloadQueue.length
+            ] })
+          ] })
+        ] }),
+        bulkDownloadCompleted && u("div", { className: "bg-base-200 rounded-lg p-4", children: u("div", { className: "flex items-start justify-between gap-4", children: [
+u("div", { className: "flex-1", children: [
+u("h3", { className: "text-lg font-semibold mb-3", children: "Download Summary" }),
+u("div", { className: "space-y-2", children: [
+u("div", { className: "flex items-center gap-2", children: [
+u(IconCircleCheck, { className: "size-5 text-success" }),
+u("span", { className: "text-lg", children: [
+                  "Success: ",
+                  successfulDownloads,
+                  " video",
+                  successfulDownloads !== 1 ? "s" : ""
+                ] })
+              ] }),
+u("div", { className: "flex items-center gap-2", children: [
+u(IconCircleX, { className: "size-5 text-error" }),
+u("span", { className: "text-lg", children: [
+                  "Failed: ",
+                  failedDownloads.size,
+                  " video",
+                  failedDownloads.size !== 1 ? "s" : ""
+                ] })
+              ] })
+            ] })
+          ] }),
+u("div", { className: "flex flex-col gap-2", children: [
+u("div", { className: "flex gap-2 justify-end", children: [
+u(
+                "div",
+                {
+                  className: "tooltip tooltip-left",
+                  "data-tip": showFailedVideos ? "Hide Failed" : "Show Failed",
+                  children: u(
+                    "button",
+                    {
+                      className: "btn btn-square btn-neutral",
+                      onClick: () => setShowFailedVideos(!showFailedVideos),
+                      children: u(IconEye, { className: "size-[1.8em]" })
+                    }
+                  )
+                }
+              ),
+u(
+                "div",
+                {
+                  className: "tooltip tooltip-left",
+                  "data-tip": "Clear Summary",
+                  children: u(
+                    "button",
+                    {
+                      className: "btn btn-square btn-error",
+                      onClick: clearFailedDownloads,
+                      children: u(IconCircleX, { className: "size-[1.8em]" })
+                    }
+                  )
+                }
+              )
+            ] }),
+            failedDownloads.size > 0 && u(
+              "button",
+              {
+                className: "btn btn-primary",
+                onClick: retryFailedDownloads,
+                children: [
+u(IconRefresh, { className: "size-[1.8em]" }),
+u("span", { children: "Retry Failed" })
+                ]
+              }
+            )
+          ] })
+        ] }) })
+      ] }),
+      loading && videos.length === 0 && u("div", { className: "text-center py-8", children: [
+u("span", { className: "loading loading-spinner loading-lg" }),
+u("p", { className: "text-xl opacity-60 mt-4", children: "Loading videos..." })
+      ] }),
+      videos.length > 0 && u(preact.Fragment, { children: [
+u("div", { className: "space-y-3", children: currentVideos.filter(
+          (video) => showFailedVideos ? failedDownloads.has(video.videoId) : true
+        ).map((video) => {
+          let bgClass = "bg-base-200";
+          if (failedDownloads.has(video.videoId)) {
+            bgClass = "alert alert-error alert-soft";
+          } else if (successfulVideoIds.has(video.videoId)) {
+            bgClass = "alert alert-success alert-soft";
+          }
+          return u(
+            "div",
+            {
+              className: `${bgClass} rounded-lg p-4`,
+              children: u("div", { className: "flex items-start gap-3", children: [
+u("div", { className: "shrink-0", style: { width: "120px" }, children: [
+u("div", { className: "aspect-video rounded overflow-hidden mb-1 relative", children: [
+u(
+                      "img",
+                      {
+                        src: video.thumbnail,
+                        alt: video.title,
+                        className: "w-full h-full object-cover"
+                      }
+                    ),
+u("div", { className: "absolute top-1 left-1", children: u(
+                      "input",
+                      {
+                        type: "checkbox",
+                        className: "checkbox checkbox-primary checkbox-lg",
+                        checked: selectedVideoIds.has(video.videoId),
+                        onChange: () => toggleVideoSelection(video.videoId),
+                        onClick: (e) => e.stopPropagation()
+                      }
+                    ) })
+                  ] }),
+                  downloadingIds.has(video.videoId) && u("div", { children: [
+u("progress", { className: "progress progress-primary w-full h-1" }),
+                    downloadProgress[video.videoId] && u("p", { className: "text-lg opacity-60 mt-1", children: formatBytes(
+                      downloadProgress[video.videoId].loaded
+                    ) })
+                  ] }),
+                  failedDownloads.has(video.videoId) && u("span", { className: "badge badge-error text-sm", children: "Failed" }),
+                  successfulVideoIds.has(video.videoId) && u("span", { className: "badge badge-success text-sm", children: "Success" })
+                ] }),
+u("div", { className: "flex-1 min-w-0 space-y-2", children: [
+u("h3", { className: "text-lg font-medium line-clamp-2", children: video.title }),
+u("div", { className: "flex items-center justify-between gap-2", children: [
+                    video.duration && u("p", { className: "text-lg opacity-60", children: video.duration }),
+u("div", { className: "flex gap-2 shrink-0", children: [
+u(
+                        "button",
+                        {
+                          className: "btn btn-square btn-secondary",
+                          onClick: () => fetchSubtitlesForDialog(video.videoId),
+                          disabled: loadingSubtitles && subtitleVideoId === video.videoId,
+                          children: loadingSubtitles && subtitleVideoId === video.videoId ? u("span", { className: "loading loading-spinner loading-sm" }) : u(IconBadgeCc, { className: "size-[1.8em]" })
+                        }
+                      ),
+u(
+                        "button",
+                        {
+                          className: "btn btn-square btn-primary",
+                          onClick: () => downloadVideo(video.videoId, video.title),
+                          disabled: downloadingIds.has(video.videoId),
+                          children: downloadingIds.has(video.videoId) ? u("span", { className: "loading loading-spinner loading-sm" }) : u(IconDownload, { className: "size-[1.8em]" })
+                        }
+                      )
+                    ] })
+                  ] })
+                ] })
+              ] })
+            },
+            video.videoId
+          );
+        }) }),
+        totalPages > 1 && u("div", { className: "flex justify-center", children: u("div", { className: "join", children: [
+u(
+            "button",
+            {
+              className: "join-item btn btn-lg",
+              disabled: currentPage === 1,
+              onClick: () => setCurrentPageCache((prev) => ({
+                ...prev,
+                [activeContentTab]: currentPage - 1
+              })),
+              children: "«"
+            }
+          ),
+u("button", { className: "join-item btn btn-lg", children: [
+            currentPage,
+            "/",
+            totalPages
+          ] }),
+u(
+            "button",
+            {
+              className: "join-item btn btn-lg",
+              disabled: currentPage === totalPages,
+              onClick: () => setCurrentPageCache((prev) => ({
+                ...prev,
+                [activeContentTab]: currentPage + 1
+              })),
+              children: "»"
+            }
+          )
+        ] }) })
+      ] }),
+      !loading && videos.length === 0 && u("div", { className: "text-center py-8", children: u("p", { className: "text-xl opacity-60", children: [
+        "No ",
+        activeContentTab,
+        " found"
+      ] }) }),
+u("p", { className: "text-lg opacity-60 text-center", children: "Using Cobalt Instances" })
+    ] });
+  }
   const THEMES = [
     "light",
     "dark",
@@ -4889,6 +6522,25 @@ u(
     const [hideProgressBar, setHideProgressBar] = hooks.useState(
       moduleSettings.value.hideProgressBar
     );
+    const [cobaltEnabled, setCobaltEnabled] = hooks.useState(
+      cobaltSettings.value.enabled
+    );
+    const [cobaltInstanceUrl, setCobaltInstanceUrl] = hooks.useState(
+      cobaltSettings.value.instanceUrl
+    );
+    const [cobaltVideoCodec, setCobaltVideoCodec] = hooks.useState(
+      cobaltSettings.value.videoCodec
+    );
+    const [cobaltVideoContainer, setCobaltVideoContainer] = hooks.useState(
+      cobaltSettings.value.videoContainer
+    );
+    const [cobaltFilenameStyle, setCobaltFilenameStyle] = hooks.useState(
+      cobaltSettings.value.filenameStyle
+    );
+    const [cobaltPreferredDubLang, setCobaltPreferredDubLang] = hooks.useState(
+      cobaltSettings.value.preferredDubLang
+    );
+    const [cobaltUrlApplied, setCobaltUrlApplied] = hooks.useState(false);
     hooks.useEffect(() => {
       loadSettings2();
     }, []);
@@ -4931,6 +6583,37 @@ u(
         "false"
       );
       setHideProgressBar(hideProgressBarSaved === "true");
+      const cobaltEnabledSaved = await storage.get("cobalt-enabled", "false");
+      setCobaltEnabled(cobaltEnabledSaved === "true");
+      const cobaltInstanceUrlSaved = await storage.get(
+        "cobalt-instance-url",
+        "https://cobalt.nichind.dev"
+      );
+      setCobaltInstanceUrl(cobaltInstanceUrlSaved);
+      const cobaltVideoCodecSaved = await storage.get(
+        "cobalt-video-codec",
+        "h264"
+      );
+      setCobaltVideoCodec(cobaltVideoCodecSaved);
+      const cobaltVideoContainerSaved = await storage.get(
+        "cobalt-video-container",
+        "auto"
+      );
+      setCobaltVideoContainer(
+        cobaltVideoContainerSaved
+      );
+      const cobaltFilenameStyleSaved = await storage.get(
+        "cobalt-filename-style",
+        "basic"
+      );
+      setCobaltFilenameStyle(
+        cobaltFilenameStyleSaved
+      );
+      const cobaltPreferredDubLangSaved = await storage.get(
+        "cobalt-preferred-dub-lang",
+        ""
+      );
+      setCobaltPreferredDubLang(cobaltPreferredDubLangSaved);
     };
     const handleBookmarkPerPageChange = async (value) => {
       setBookmarkPerPage(value);
@@ -5025,6 +6708,75 @@ u(
       window.dispatchEvent(new CustomEvent("module-settings-updated"));
       playToggleSound();
     };
+    const handleCobaltEnabledToggle = async (checked) => {
+      setCobaltEnabled(checked);
+      await storage.set("cobalt-enabled", checked.toString());
+      cobaltSettings.value = {
+        ...cobaltSettings.value,
+        enabled: checked
+      };
+      playToggleSound();
+      window.dispatchEvent(new CustomEvent("settings-updated"));
+    };
+    const handleCobaltInstanceUrlChange = async (url) => {
+      setCobaltInstanceUrl(url);
+      await storage.set("cobalt-instance-url", url);
+      cobaltSettings.value = {
+        ...cobaltSettings.value,
+        instanceUrl: url
+      };
+      playApplySound();
+      setCobaltUrlApplied(true);
+      setTimeout(() => setCobaltUrlApplied(false), 500);
+      window.dispatchEvent(new CustomEvent("settings-updated"));
+    };
+    const handleCobaltVideoCodecChange = async (codec) => {
+      setCobaltVideoCodec(codec);
+      await storage.set("cobalt-video-codec", codec);
+      let newContainer = cobaltVideoContainer;
+      if (codec === "h264" && (cobaltVideoContainer === "webm" || cobaltVideoContainer === "mkv")) {
+        newContainer = "auto";
+        setCobaltVideoContainer("auto");
+        await storage.set("cobalt-video-container", "auto");
+      } else if ((codec === "vp9" || codec === "av1") && cobaltVideoContainer === "mp4") {
+        newContainer = "auto";
+        setCobaltVideoContainer("auto");
+        await storage.set("cobalt-video-container", "auto");
+      }
+      cobaltSettings.value = {
+        ...cobaltSettings.value,
+        videoCodec: codec,
+        videoContainer: newContainer
+      };
+      window.dispatchEvent(new CustomEvent("settings-updated"));
+    };
+    const handleCobaltVideoContainerChange = async (container) => {
+      setCobaltVideoContainer(container);
+      await storage.set("cobalt-video-container", container);
+      cobaltSettings.value = {
+        ...cobaltSettings.value,
+        videoContainer: container
+      };
+      window.dispatchEvent(new CustomEvent("settings-updated"));
+    };
+    const handleCobaltFilenameStyleChange = async (style) => {
+      setCobaltFilenameStyle(style);
+      await storage.set("cobalt-filename-style", style);
+      cobaltSettings.value = {
+        ...cobaltSettings.value,
+        filenameStyle: style
+      };
+      window.dispatchEvent(new CustomEvent("settings-updated"));
+    };
+    const handleCobaltPreferredDubLangChange = async (lang) => {
+      setCobaltPreferredDubLang(lang);
+      await storage.set("cobalt-preferred-dub-lang", lang);
+      cobaltSettings.value = {
+        ...cobaltSettings.value,
+        preferredDubLang: lang
+      };
+      window.dispatchEvent(new CustomEvent("settings-updated"));
+    };
     const handleResetDefaults = async () => {
       await storage.set("bookmark-per-page", "8");
       await storage.set("ddl-per-page", "8");
@@ -5034,6 +6786,12 @@ u(
       await storage.set("ddl-format", "video");
       await storage.set("ddl-videoQuality", "1080");
       await storage.set("ddl-audioBitrate", "320");
+      await storage.set("cobalt-enabled", "false");
+      await storage.set("cobalt-instance-url", "https://cobalt.nichind.dev");
+      await storage.set("cobalt-video-codec", "h264");
+      await storage.set("cobalt-video-container", "auto");
+      await storage.set("cobalt-filename-style", "basic");
+      await storage.set("cobalt-preferred-dub-lang", "");
       await storage.set("module-loop-video", "true");
       await storage.set("module-screenshot-format", "jpg");
       await storage.set("module-screenshot-filename", "title");
@@ -5066,6 +6824,20 @@ u(
         thumbnailDownload: true,
         hideProgressBar: false
       };
+      setCobaltEnabled(false);
+      setCobaltInstanceUrl("https://cobalt.nichind.dev");
+      setCobaltVideoCodec("h264");
+      setCobaltVideoContainer("auto");
+      setCobaltFilenameStyle("basic");
+      setCobaltPreferredDubLang("");
+      cobaltSettings.value = {
+        enabled: false,
+        instanceUrl: "https://cobalt.nichind.dev",
+        videoCodec: "h264",
+        videoContainer: "auto",
+        filenameStyle: "basic",
+        preferredDubLang: ""
+      };
       window.dispatchEvent(new CustomEvent("settings-updated"));
       window.dispatchEvent(new CustomEvent("module-settings-updated"));
       window.dispatchEvent(new CustomEvent("themeChanged"));
@@ -5078,7 +6850,7 @@ u("h3", { className: "text-xl font-semibold mb-4", children: "Appearance" }),
 u("div", { className: "space-y-4", children: [
 u(ThemeSelector, {}),
 u("div", { className: "bg-base-200 rounded-lg p-4", children: [
-u("label", { className: "text-xl font-medium mb-3 block", children: "Panel Width (px)" }),
+u("label", { className: "text-xl font-medium mb-3 block", children: "Panel Width" }),
 u("div", { className: "join w-full", children: [
 u(
                 "input",
@@ -5357,7 +7129,205 @@ u(
                 )
               }
             )
-          ] }) })
+          ] }) }),
+u("div", { className: "bg-base-200 rounded-lg p-4", children: u("div", { className: "flex items-center justify-between", children: [
+u("label", { className: "text-xl", children: "Cobalt Instances" }),
+u(
+              "input",
+              {
+                type: "checkbox",
+                className: "toggle toggle-primary",
+                checked: cobaltEnabled,
+                onChange: (e) => handleCobaltEnabledToggle(
+                  e.target.checked
+                )
+              }
+            )
+          ] }) }),
+          cobaltEnabled && u(preact.Fragment, { children: [
+u("div", { className: "bg-base-200 rounded-lg p-4", children: [
+u("label", { className: "text-xl font-medium mb-3 block", children: "Instance URL" }),
+u("div", { className: "join w-full", children: [
+u(
+                  "input",
+                  {
+                    type: "text",
+                    className: "input input-bordered join-item flex-1 text-xl",
+                    value: cobaltInstanceUrl,
+                    onChange: (e) => setCobaltInstanceUrl(e.target.value),
+                    onKeyDown: (e) => {
+                      if (e.key === "Enter") {
+                        handleCobaltInstanceUrlChange(cobaltInstanceUrl);
+                      }
+                    },
+                    placeholder: "https://cobalt.nichind.dev"
+                  }
+                ),
+u(
+                  "button",
+                  {
+                    className: `btn join-item ${cobaltUrlApplied ? "btn-success" : "btn-neutral"}`,
+                    onClick: () => handleCobaltInstanceUrlChange(cobaltInstanceUrl),
+                    children: cobaltUrlApplied ? u(IconCheck, { className: "size-[1.8em]" }) : "Apply"
+                  }
+                )
+              ] })
+            ] }),
+u("div", { className: "bg-base-200 rounded-lg p-4", children: [
+u("label", { className: "text-xl font-medium block mb-3", children: "Video Codec" }),
+u(
+                "select",
+                {
+                  className: "select select-bordered w-full text-xl",
+                  value: cobaltVideoCodec,
+                  onChange: (e) => handleCobaltVideoCodecChange(
+                    e.target.value
+                  ),
+                  children: [
+u("option", { value: "h264", children: "H.264" }),
+u("option", { value: "av1", children: "AV1" }),
+u("option", { value: "vp9", children: "VP9" })
+                  ]
+                }
+              )
+            ] }),
+u("div", { className: "bg-base-200 rounded-lg p-4", children: [
+u("label", { className: "text-xl font-medium block mb-3", children: "Video Container" }),
+u(
+                "select",
+                {
+                  className: "select select-bordered w-full text-xl",
+                  value: cobaltVideoContainer,
+                  onChange: (e) => handleCobaltVideoContainerChange(
+                    e.target.value
+                  ),
+                  children: cobaltVideoCodec === "h264" ? u(preact.Fragment, { children: [
+u("option", { value: "auto", children: "Auto (MP4)" }),
+u("option", { value: "mp4", children: "MP4" })
+                  ] }) : u(preact.Fragment, { children: [
+u("option", { value: "auto", children: "Auto (WebM)" }),
+u("option", { value: "webm", children: "WebM" }),
+u("option", { value: "mkv", children: "MKV" })
+                  ] })
+                }
+              ),
+              (cobaltVideoCodec === "vp9" || cobaltVideoCodec === "av1") && u("p", { className: "text-lg opacity-60 mt-2", children: "VP9/AV1 work best with WebM" })
+            ] }),
+u("div", { className: "bg-base-200 rounded-lg p-4", children: [
+u("label", { className: "text-xl font-medium block mb-3", children: "Filename Style" }),
+u(
+                "select",
+                {
+                  className: "select select-bordered w-full text-xl",
+                  value: cobaltFilenameStyle,
+                  onChange: (e) => handleCobaltFilenameStyleChange(
+                    e.target.value
+                  ),
+                  children: [
+u("option", { value: "classic", children: "Classic" }),
+u("option", { value: "pretty", children: "Pretty" }),
+u("option", { value: "basic", children: "Basic" }),
+u("option", { value: "nerdy", children: "Nerdy" })
+                  ]
+                }
+              )
+            ] }),
+u("div", { className: "bg-base-200 rounded-lg p-4", children: [
+u("label", { className: "text-xl font-medium block mb-3", children: "Preferred Dub Language" }),
+u(
+                "select",
+                {
+                  className: "select select-bordered w-full text-xl",
+                  value: cobaltPreferredDubLang,
+                  onChange: (e) => handleCobaltPreferredDubLangChange(
+                    e.target.value
+                  ),
+                  children: [
+u("option", { value: "", children: "Original Audio" }),
+u("option", { value: "en", children: "English (en)" }),
+u("option", { value: "es", children: "español (es)" }),
+u("option", { value: "pt", children: "português (pt)" }),
+u("option", { value: "fr", children: "français (fr)" }),
+u("option", { value: "ru", children: "русский (ru)" }),
+u("option", { value: "zh", children: "中文 (zh)" }),
+u("option", { value: "vi", children: "Tiếng Việt (vi)" }),
+u("option", { value: "hi", children: "हिन्दी (hi)" }),
+u("option", { value: "bn", children: "বাংলা (bn)" }),
+u("option", { value: "ja", children: "日本語 (ja)" }),
+u("option", { value: "af", children: "Afrikaans (af)" }),
+u("option", { value: "am", children: "አማርኛ (am)" }),
+u("option", { value: "ar", children: "العربية (ar)" }),
+u("option", { value: "as", children: "Assamese (as)" }),
+u("option", { value: "az", children: "azərbaycan (az)" }),
+u("option", { value: "be", children: "Belarusian (be)" }),
+u("option", { value: "bg", children: "български (bg)" }),
+u("option", { value: "bs", children: "bosanski (bs)" }),
+u("option", { value: "ca", children: "català (ca)" }),
+u("option", { value: "cs", children: "čeština (cs)" }),
+u("option", { value: "da", children: "dansk (da)" }),
+u("option", { value: "de", children: "Deutsch (de)" }),
+u("option", { value: "el", children: "Ελληνικά (el)" }),
+u("option", { value: "et", children: "eesti (et)" }),
+u("option", { value: "eu", children: "Basque (eu)" }),
+u("option", { value: "fa", children: "فارسی (fa)" }),
+u("option", { value: "fi", children: "suomi (fi)" }),
+u("option", { value: "fil", children: "Filipino (fil)" }),
+u("option", { value: "gl", children: "Galician (gl)" }),
+u("option", { value: "gu", children: "ગુજરાતી (gu)" }),
+u("option", { value: "hr", children: "hrvatski (hr)" }),
+u("option", { value: "hu", children: "magyar (hu)" }),
+u("option", { value: "hy", children: "Armenian (hy)" }),
+u("option", { value: "id", children: "Indonesia (id)" }),
+u("option", { value: "is", children: "Icelandic (is)" }),
+u("option", { value: "it", children: "italiano (it)" }),
+u("option", { value: "iw", children: "עברית (iw)" }),
+u("option", { value: "ka", children: "Georgian (ka)" }),
+u("option", { value: "kk", children: "Kazakh (kk)" }),
+u("option", { value: "km", children: "Khmer (km)" }),
+u("option", { value: "kn", children: "ಕನ್ನಡ (kn)" }),
+u("option", { value: "ko", children: "한국어 (ko)" }),
+u("option", { value: "ky", children: "Kyrgyz (ky)" }),
+u("option", { value: "lo", children: "Lao (lo)" }),
+u("option", { value: "lt", children: "lietuvių (lt)" }),
+u("option", { value: "lv", children: "latviešu (lv)" }),
+u("option", { value: "mk", children: "Macedonian (mk)" }),
+u("option", { value: "ml", children: "മലയാളം (ml)" }),
+u("option", { value: "mn", children: "Mongolian (mn)" }),
+u("option", { value: "mr", children: "मराठी (mr)" }),
+u("option", { value: "ms", children: "Melayu (ms)" }),
+u("option", { value: "my", children: "Burmese (my)" }),
+u("option", { value: "ne", children: "Nepali (ne)" }),
+u("option", { value: "nl", children: "Nederlands (nl)" }),
+u("option", { value: "no", children: "norsk (no)" }),
+u("option", { value: "or", children: "Odia (or)" }),
+u("option", { value: "pa", children: "ਪੰਜਾਬੀ (pa)" }),
+u("option", { value: "pl", children: "polski (pl)" }),
+u("option", { value: "ro", children: "română (ro)" }),
+u("option", { value: "si", children: "Sinhala (si)" }),
+u("option", { value: "sk", children: "slovenčina (sk)" }),
+u("option", { value: "sl", children: "slovenščina (sl)" }),
+u("option", { value: "sq", children: "Albanian (sq)" }),
+u("option", { value: "sr", children: "српски (sr)" }),
+u("option", { value: "sv", children: "svenska (sv)" }),
+u("option", { value: "sw", children: "Kiswahili (sw)" }),
+u("option", { value: "ta", children: "தமிழ் (ta)" }),
+u("option", { value: "te", children: "తెలుగు (te)" }),
+u("option", { value: "th", children: "ไทย (th)" }),
+u("option", { value: "tr", children: "Türkçe (tr)" }),
+u("option", { value: "uk", children: "українська (uk)" }),
+u("option", { value: "ur", children: "اردو (ur)" }),
+u("option", { value: "uz", children: "o'zbek (uz)" }),
+u("option", { value: "zh-Hans", children: "简体中文 (zh-Hans)" }),
+u("option", { value: "zh-Hant", children: "繁體中文 (zh-Hant)" }),
+u("option", { value: "zh-CN", children: "中文（中国） (zh-CN)" }),
+u("option", { value: "zh-HK", children: "中文（香港） (zh-HK)" }),
+u("option", { value: "zh-TW", children: "中文（台灣） (zh-TW)" }),
+u("option", { value: "zu", children: "Zulu (zu)" })
+                  ]
+                }
+              )
+            ] })
+          ] })
         ] })
       ] }),
 u("div", { children: [
@@ -5457,7 +7427,7 @@ u("span", { children: "Report an Issue" })
       ] })
     ] });
   }
-  const version = "1.0.3";
+  const version = "1.0.4";
   const pkg = {
     version
   };
@@ -5586,7 +7556,7 @@ u(
                     style: {
                       display: activeTab.value === "ddl" ? "block" : "none"
                     },
-                    children: u(DDLTab, {})
+                    children: cobaltSettings.value.enabled ? u(CobaltTab, {}) : u(DDLTab, {})
                   }
                 ),
 u(
@@ -6375,8 +8345,14 @@ zu: "ZA"
     for (const [entity, char] of Object.entries(entities)) {
       decoded = decoded.replace(new RegExp(entity, "g"), char);
     }
-    decoded = decoded.replace(/&#(\d+);/g, (_, num) => String.fromCharCode(parseInt(num, 10)));
-    decoded = decoded.replace(/&#x([0-9A-Fa-f]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+    decoded = decoded.replace(
+      /&#(\d+);/g,
+      (_, num) => String.fromCharCode(parseInt(num, 10))
+    );
+    decoded = decoded.replace(
+      /&#x([0-9A-Fa-f]+);/g,
+      (_, hex) => String.fromCharCode(parseInt(hex, 16))
+    );
     return decoded;
   }
   function convertToSRT(cues) {
@@ -6400,7 +8376,10 @@ zu: "ZA"
     const minutes = Math.floor(seconds % 3600 / 60);
     const secs = Math.floor(seconds % 60);
     const milliseconds = Math.floor(seconds % 1 * 1e3);
-    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")},${String(milliseconds).padStart(3, "0")}`;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
+    2,
+    "0"
+  )}:${String(secs).padStart(2, "0")},${String(milliseconds).padStart(3, "0")}`;
   }
   function convertToTXT(cues) {
     return cues.map((cue) => cue.text.trim()).join("\n");
@@ -6457,8 +8436,8 @@ zu: "ZA"
               method: "GET",
               url,
               headers: {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Referer": "https://www.youtube.com/"
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+                Referer: "https://www.youtube.com/"
               },
               onload: (response) => {
                 if (response.status !== 200) {
