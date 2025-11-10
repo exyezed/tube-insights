@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TubeInsights
 // @namespace    https://github.com/exyezed/tube-insights
-// @version      1.0.4
+// @version      1.0.5
 // @author       exyezed
 // @description  A feature-rich and high-performance YouTube userscript, built on the InnerTube API — delivering advanced analytics, live stats, smart bookmarking, and seamless video/audio downloading without leaving YouTube.
 // @license      MIT
@@ -114,6 +114,44 @@
       });
     }
   };
+  const COBALT_DEFAULTS = {
+    INSTANCE_URL: "https://cobalt.nichind.dev",
+    FILENAME_STYLE: "basic"
+  };
+  const VIDEO_QUALITIES = [
+    "144",
+    "240",
+    "360",
+    "480",
+    "720",
+    "1080"
+  ];
+  const DDL_VIDEO_QUALITIES = [
+    "144",
+    "240",
+    "360",
+    "480",
+    "720",
+    "1080",
+    "1440",
+    "2160"
+  ];
+  const AUDIO_BITRATES = ["128", "256", "320"];
+  const FILENAME_STYLES = [
+    { value: "classic", label: "Classic" },
+    { value: "pretty", label: "Pretty" },
+    { value: "basic", label: "Basic" },
+    { value: "nerdy", label: "Nerdy" }
+  ];
+  const SCREENSHOT_FORMATS = [
+    { value: "jpg", label: "JPG" },
+    { value: "png", label: "PNG" },
+    { value: "webp", label: "WebP" }
+  ];
+  const SCREENSHOT_FILENAME_OPTIONS = [
+    { value: "title", label: "Video Title" },
+    { value: "videoId", label: "Video ID" }
+  ];
   const isPanelVisible = signals.signal(true);
   const activeTab = signals.signal("insights");
   const currentTheme = signals.signal("light");
@@ -125,6 +163,7 @@
   const subtitleDialogData = signals.signal(null);
   const moduleSettings = signals.signal({
     loopVideo: true,
+    returnDislike: true,
     screenshotFormat: "jpg",
     screenshotFilename: "title",
     screenshotDownload: true,
@@ -134,11 +173,10 @@
   });
   const cobaltSettings = signals.signal({
     enabled: false,
-    instanceUrl: "https://cobalt.nichind.dev",
-    videoCodec: "h264",
-    videoContainer: "auto",
-    filenameStyle: "basic",
-    preferredDubLang: ""
+    instanceUrl: COBALT_DEFAULTS.INSTANCE_URL,
+    filenameStyle: COBALT_DEFAULTS.FILENAME_STYLE,
+    preferredDubLang: "",
+    debug: false
   });
   function togglePanel() {
     isPanelVisible.value = !isPanelVisible.value;
@@ -160,6 +198,7 @@
       activeTab.value = savedTab;
     }
     const loopVideo = await storage.get("module-loop-video", "true");
+    const returnDislike = await storage.get("module-return-dislike", "true");
     const screenshotFormat = await storage.get("module-screenshot-format", "jpg");
     const screenshotFilename = await storage.get(
       "module-screenshot-filename",
@@ -180,6 +219,7 @@
     );
     moduleSettings.value = {
       loopVideo: loopVideo === "true",
+      returnDislike: returnDislike === "true",
       screenshotFormat,
       screenshotFilename,
       screenshotDownload: screenshotDownload === "true",
@@ -190,12 +230,7 @@
     const cobaltEnabled = await storage.get("cobalt-enabled", "false");
     const cobaltInstanceUrl = await storage.get(
       "cobalt-instance-url",
-      "https://cobalt.nichind.dev"
-    );
-    const cobaltVideoCodec = await storage.get("cobalt-video-codec", "h264");
-    const cobaltVideoContainer = await storage.get(
-      "cobalt-video-container",
-      "auto"
+      COBALT_DEFAULTS.INSTANCE_URL
     );
     const cobaltFilenameStyle = await storage.get(
       "cobalt-filename-style",
@@ -205,13 +240,13 @@
       "cobalt-preferred-dub-lang",
       ""
     );
+    const cobaltDebug = await storage.get("cobalt-debug", "false");
     cobaltSettings.value = {
       enabled: cobaltEnabled === "true",
       instanceUrl: cobaltInstanceUrl,
-      videoCodec: cobaltVideoCodec,
-      videoContainer: cobaltVideoContainer,
       filenameStyle: cobaltFilenameStyle,
-      preferredDubLang: cobaltPreferredDubLang
+      preferredDubLang: cobaltPreferredDubLang,
+      debug: cobaltDebug === "true"
     };
   }
   function openSaveChannelDialog(data) {
@@ -354,7 +389,6 @@
   var IconInfoCircle = createPreactComponent("outline", "info-circle", "InfoCircle", [["path", { "d": "M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0", "key": "svg-0" }], ["path", { "d": "M12 9h.01", "key": "svg-1" }], ["path", { "d": "M11 12h1v4h1", "key": "svg-2" }]]);
   var IconMessage = createPreactComponent("outline", "message", "Message", [["path", { "d": "M8 9h8", "key": "svg-0" }], ["path", { "d": "M8 13h6", "key": "svg-1" }], ["path", { "d": "M18 4a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-5l-5 3v-3h-2a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12z", "key": "svg-2" }]]);
   var IconMovie = createPreactComponent("outline", "movie", "Movie", [["path", { "d": "M4 4m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z", "key": "svg-0" }], ["path", { "d": "M8 4l0 16", "key": "svg-1" }], ["path", { "d": "M16 4l0 16", "key": "svg-2" }], ["path", { "d": "M4 8l4 0", "key": "svg-3" }], ["path", { "d": "M4 16l4 0", "key": "svg-4" }], ["path", { "d": "M4 12l16 0", "key": "svg-5" }], ["path", { "d": "M16 8l4 0", "key": "svg-6" }], ["path", { "d": "M16 16l4 0", "key": "svg-7" }]]);
-  var IconMusic = createPreactComponent("outline", "music", "Music", [["path", { "d": "M3 17a3 3 0 1 0 6 0a3 3 0 0 0 -6 0", "key": "svg-0" }], ["path", { "d": "M13 17a3 3 0 1 0 6 0a3 3 0 0 0 -6 0", "key": "svg-1" }], ["path", { "d": "M9 17v-13h10v13", "key": "svg-2" }], ["path", { "d": "M9 8h10", "key": "svg-3" }]]);
   var IconRefresh = createPreactComponent("outline", "refresh", "Refresh", [["path", { "d": "M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4", "key": "svg-0" }], ["path", { "d": "M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4", "key": "svg-1" }]]);
   var IconSettings = createPreactComponent("outline", "settings", "Settings", [["path", { "d": "M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065z", "key": "svg-0" }], ["path", { "d": "M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0", "key": "svg-1" }]]);
   var IconThumbDown = createPreactComponent("outline", "thumb-down", "ThumbDown", [["path", { "d": "M7 13v-8a1 1 0 0 0 -1 -1h-2a1 1 0 0 0 -1 1v7a1 1 0 0 0 1 1h3a4 4 0 0 1 4 4v1a2 2 0 0 0 4 0v-5h3a2 2 0 0 0 2 -2l-1 -5a2 3 0 0 0 -2 -2h-7a3 3 0 0 0 -3 3", "key": "svg-0" }]]);
@@ -1373,7 +1407,7 @@ isAutoGenerated: true
     const [channelInfo, setChannelInfo] = hooks.useState(null);
     const [videoId, setVideoId] = hooks.useState(null);
     const [videoInfo, setVideoInfo] = hooks.useState(null);
-    const [dislikes, setDislikes] = hooks.useState(0);
+    const [dislikes, setDislikes2] = hooks.useState(0);
     const [monetization, setMonetization] = hooks.useState(null);
     const [loading, setLoading] = hooks.useState(false);
     const [tabs, setTabs] = hooks.useState([
@@ -1520,7 +1554,7 @@ isAutoGenerated: true
     const fetchVideoData = async (id) => {
       setLoading(true);
       setMonetization(null);
-      setDislikes(0);
+      setDislikes2(0);
       try {
         const response = await fetch(
           `https://tubeinsights.exyezed.cc/api/videos/${id}`
@@ -1572,10 +1606,10 @@ isAutoGenerated: true
             );
             if (dislikeResponse.ok) {
               const dislikeData = await dislikeResponse.json();
-              setDislikes(dislikeData.dislikes || 0);
+              setDislikes2(dislikeData.dislikes || 0);
             }
           } catch {
-            setDislikes(0);
+            setDislikes2(0);
           }
           const videoUrl = `https://www.youtube.com/watch?v=${item.id}`;
           checkMonetizationAsync(videoUrl);
@@ -2265,7 +2299,7 @@ u("span", { className: "text-xl font-semibold", children: formatNumber(tabs.redu
   const BACKEND_API_URL = "https://tubeinsights.exyezed.cc/api/channels/";
   const BACKEND_VIDEO_API_URL = "https://tubeinsights.exyezed.cc/api/videos/";
   const DISLIKE_API_URL = "https://returnyoutubedislikeapi.com/votes";
-  async function fetchDislikes(videoId) {
+  async function fetchDislikes$1(videoId) {
     try {
       const response = await fetch(`${DISLIKE_API_URL}?videoId=${videoId}`);
       if (!response.ok) {
@@ -2344,7 +2378,7 @@ u("span", { className: "text-xl font-semibold", children: formatNumber(tabs.redu
       if (!data || !data.status) {
         return null;
       }
-      const dislikeCount = await fetchDislikes(videoId);
+      const dislikeCount = await fetchDislikes$1(videoId);
       return {
         liveViews: data.liveViews,
         liveLikes: data.liveLikes,
@@ -2376,7 +2410,7 @@ u("span", { className: "text-xl font-semibold", children: formatNumber(tabs.redu
                 resolve(null);
                 return;
               }
-              const dislikeCount = await fetchDislikes(videoId);
+              const dislikeCount = await fetchDislikes$1(videoId);
               resolve({
                 liveViews: data.followerCount,
                 liveLikes: data.bottomOdos && data.bottomOdos[0] || 0,
@@ -3611,6 +3645,40 @@ u(
       ] })
     ] });
   }
+  function IconFileMp4({
+    className,
+    size = 24
+  }) {
+    return u(
+      "svg",
+      {
+        xmlns: "http://www.w3.org/2000/svg",
+        viewBox: "0 0 640 640",
+        width: size,
+        height: size,
+        className,
+        fill: "currentColor",
+        children: u("path", { d: "M240 112L128 112C119.2 112 112 119.2 112 128L112 512C112 520.8 119.2 528 128 528L176 528L176 576L128 576C92.7 576 64 547.3 64 512L64 128C64 92.7 92.7 64 128 64L261.5 64C278.5 64 294.8 70.7 306.8 82.7L429.3 205.3C441.3 217.3 448 233.6 448 250.6L448 400.1L400 400.1L400 272.1L312 272.1C272.2 272.1 240 239.9 240 200.1L240 112.1zM380.1 224L288 131.9L288 200C288 213.3 298.7 224 312 224L380.1 224zM257.1 453.7L288 505.1L318.9 453.7C323.5 446 332.7 442.3 341.4 444.7C350.1 447.1 356 455 356 464L356 592C356 603 347 612 336 612C325 612 316 603 316 592L316 536.2L305.1 554.3C301.5 560.3 295 564 288 564C281 564 274.5 560.3 270.9 554.3L260 536.2L260 592C260 603 251 612 240 612C229 612 220 603 220 592L220 464C220 455 226 447.1 234.7 444.7C243.4 442.3 252.6 446 257.2 453.7zM400 444L432 444C465.1 444 492 470.9 492 504C492 537.1 465.1 564 432 564L420 564L420 592C420 603 411 612 400 612C389 612 380 603 380 592L380 464C380 453 389 444 400 444zM432 524C443 524 452 515 452 504C452 493 443 484 432 484L420 484L420 524L432 524zM513.9 542.1C510.1 538.3 508 533.3 508 528L508 464C508 453 517 444 528 444C539 444 548 453 548 464L548 508L572 508L572 464C572 453 581 444 592 444C603 444 612 453 612 464L612 592C612 603 603 612 592 612C581 612 572 603 572 592L572 548L528 548C522.7 548 517.6 545.9 513.9 542.1z" })
+      }
+    );
+  }
+  function IconFileMp3({
+    className,
+    size = 24
+  }) {
+    return u(
+      "svg",
+      {
+        xmlns: "http://www.w3.org/2000/svg",
+        viewBox: "0 0 640 640",
+        width: size,
+        height: size,
+        className,
+        fill: "currentColor",
+        children: u("path", { d: "M240 112L128 112C119.2 112 112 119.2 112 128L112 512C112 520.8 119.2 528 128 528L176 528L176 576L128 576C92.7 576 64 547.3 64 512L64 128C64 92.7 92.7 64 128 64L261.5 64C278.5 64 294.8 70.7 306.8 82.7L429.3 205.3C441.3 217.3 448 233.6 448 250.6L448 400.1L400 400.1L400 272.1L312 272.1C272.2 272.1 240 239.9 240 200.1L240 112.1zM380.1 224L288 131.9L288 200C288 213.3 298.7 224 312 224L380.1 224zM257.1 453.7L288 505.1L318.9 453.7C323.5 446 332.7 442.3 341.4 444.7C350.1 447.1 356 455 356 464L356 592C356 603 347 612 336 612C325 612 316 603 316 592L316 536.2L305.1 554.3C301.5 560.3 295 564 288 564C281 564 274.5 560.3 270.9 554.3L260 536.2L260 592C260 603 251 612 240 612C229 612 220 603 220 592L220 464C220 455 226 447.1 234.7 444.7C243.4 442.3 252.6 446 257.2 453.7zM400 444L432 444C465.1 444 492 470.9 492 504C492 537.1 465.1 564 432 564L420 564L420 592C420 603 411 612 400 612C389 612 380 603 380 592L380 464C380 453 389 444 400 444zM432 524C443 524 452 515 452 504C452 493 443 484 432 484L420 484L420 524L432 524zM612 560C612 588.7 588.7 612 560 612L528 612C517 612 508 603 508 592C508 581 517 572 528 572L560 572C566.6 572 572 566.6 572 560C572 553.4 566.6 548 560 548L536 548C525 548 516 539 516 528C516 517 525 508 536 508L560 508C566.6 508 572 502.6 572 496C572 489.4 566.6 484 560 484L528 484C517 484 508 475 508 464C508 453 517 444 528 444L560 444C588.7 444 612 467.3 612 496C612 508.1 607.9 519.2 601 528C607.9 536.8 612 547.9 612 560z" })
+      }
+    );
+  }
   function sanitizeFilename(filename) {
     return filename.replace(/[<>:"/\\|?*\x00-\x1F\x7F]/g, "").replace(/\s+/g, " ").trim().substring(0, 200);
   }
@@ -3686,17 +3754,8 @@ new Set()
     const videos = videosCache[activeContentTab];
     const loading = loadingCache[activeContentTab];
     const currentPage = currentPageCache[activeContentTab];
-    const videoQualities = [
-      "144",
-      "240",
-      "360",
-      "480",
-      "720",
-      "1080",
-      "1440",
-      "2160"
-    ];
-    const audioQualities = ["128", "256", "320"];
+    const videoQualities = DDL_VIDEO_QUALITIES;
+    const audioQualities = AUDIO_BITRATES;
     const isChannelPage = () => {
       const path = window.location.pathname;
       return path.startsWith("/@") || path.startsWith("/channel/");
@@ -4405,7 +4464,7 @@ u(
                   storage.set("ddl-format", "video");
                 },
                 children: [
-u(IconVideo, { className: "size-[1.8em]" }),
+u(IconFileMp4, { className: "size-[1.8em]", size: 28 }),
 u("span", { className: "text-xl", children: "Video" })
                 ]
               }
@@ -4419,7 +4478,7 @@ u(
                   storage.set("ddl-format", "audio");
                 },
                 children: [
-u(IconMusic, { className: "size-[1.8em]" }),
+u(IconFileMp3, { className: "size-[1.8em]", size: 28 }),
 u("span", { className: "text-xl", children: "Audio" })
                 ]
               }
@@ -4542,7 +4601,7 @@ u(
                 storage.set("ddl-format", "video");
               },
               children: [
-u(IconVideo, { className: "size-[1.8em]" }),
+u(IconFileMp4, { className: "size-[1.8em]", size: 28 }),
 u("span", { className: "text-xl", children: "Video" })
               ]
             }
@@ -4556,7 +4615,7 @@ u(
                 storage.set("ddl-format", "audio");
               },
               children: [
-u(IconMusic, { className: "size-[1.8em]" }),
+u(IconFileMp3, { className: "size-[1.8em]", size: 28 }),
 u("span", { className: "text-xl", children: "Audio" })
               ]
             }
@@ -4890,7 +4949,7 @@ u(
   }
   class CobaltService {
     instanceUrl;
-    constructor(instanceUrl = "https://cobalt.nichind.dev") {
+    constructor(instanceUrl = COBALT_DEFAULTS.INSTANCE_URL) {
       this.instanceUrl = instanceUrl.replace(/\/$/, "");
     }
     setInstanceUrl(url) {
@@ -4956,8 +5015,7 @@ u(
     }
     async downloadFile(url, filename, onProgress) {
       return new Promise((resolve, reject) => {
-        const isHttps = url.toLowerCase().startsWith("https://");
-        const finalUrl = isHttps ? url : `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`;
+        const finalUrl = url;
         GM_xmlhttpRequest({
           method: "GET",
           url: finalUrl,
@@ -5012,6 +5070,105 @@ u(
       });
     }
   }
+  function IconFileAudio({
+    className,
+    size = 24
+  }) {
+    return u(
+      "svg",
+      {
+        xmlns: "http://www.w3.org/2000/svg",
+        viewBox: "0 0 640 640",
+        width: size,
+        height: size,
+        className,
+        fill: "currentColor",
+        children: u("path", { d: "M269.7 225.1C255.2 142.6 183.1 80 96.4 80L96.4 80L88.4 80C75.1 80 64.4 69.3 64.4 56C64.4 42.7 75.1 32 88.4 32L96.4 32L96.4 32C204.1 32 294 107.9 315.5 209.1L362.5 256.1C376.6 270.1 384.4 289.2 384.4 309.1C384.4 346.8 356.6 377.9 320.4 383.2L320.4 488C320.4 536.6 281 576 232.4 576L88.4 576C75.1 576 64.4 565.3 64.4 552C64.4 538.7 75.1 528 88.4 528L232.4 528C254.5 528 272.4 510.1 272.4 488L272.4 480L198 473.8C185.8 472.8 176.4 462.6 176.4 450.4C176.4 439.6 183.7 430.2 194.2 427.6L272.4 408.1L272.4 360.1C272.4 346.8 283.1 336.1 296.4 336.1L309.5 336.1C324.4 336.1 336.4 324 336.4 309.2C336.4 302.1 333.6 295.2 328.5 290.2L276.3 238C272.8 234.5 270.5 230.1 269.6 225.2zM160.4 240C160.4 222.3 174.7 208 192.4 208C210.1 208 224.4 222.3 224.4 240C224.4 257.7 210.1 272 192.4 272C174.7 272 160.4 257.7 160.4 240zM508.4 289C517.8 279.6 533 279.6 542.3 289C632.9 379.6 632.9 526.5 542.3 617.1C532.9 626.5 517.7 626.5 508.4 617.1C499.1 607.7 499 592.5 508.4 583.2C580.3 511.3 580.3 394.8 508.4 323C499 313.6 499 298.4 508.4 289.1zM440.5 356.9C449.9 347.5 465.1 347.5 474.4 356.9C527.5 410 527.5 496.1 474.4 549.2C465 558.6 449.8 558.6 440.5 549.2C431.2 539.8 431.1 524.6 440.5 515.3C474.9 480.9 474.9 425.2 440.5 390.8C431.1 381.4 431.1 366.2 440.5 356.9z" })
+      }
+    );
+  }
+  const DUB_LANGUAGE_OPTIONS = [
+    { value: "", label: "Original Audio" },
+    { value: "en", label: "English (en)" },
+    { value: "es", label: "español (es)" },
+    { value: "pt", label: "português (pt)" },
+    { value: "fr", label: "français (fr)" },
+    { value: "ru", label: "русский (ru)" },
+    { value: "zh", label: "中文 (zh)" },
+    { value: "vi", label: "Tiếng Việt (vi)" },
+    { value: "hi", label: "हिन्दी (hi)" },
+    { value: "bn", label: "বাংলা (bn)" },
+    { value: "ja", label: "日本語 (ja)" },
+    { value: "af", label: "Afrikaans (af)" },
+    { value: "am", label: "አማርኛ (am)" },
+    { value: "ar", label: "العربية (ar)" },
+    { value: "as", label: "Assamese (as)" },
+    { value: "az", label: "azərbaycan (az)" },
+    { value: "be", label: "Belarusian (be)" },
+    { value: "bg", label: "български (bg)" },
+    { value: "bs", label: "bosanski (bs)" },
+    { value: "ca", label: "català (ca)" },
+    { value: "cs", label: "čeština (cs)" },
+    { value: "da", label: "dansk (da)" },
+    { value: "de", label: "Deutsch (de)" },
+    { value: "el", label: "Ελληνικά (el)" },
+    { value: "et", label: "eesti (et)" },
+    { value: "eu", label: "Basque (eu)" },
+    { value: "fa", label: "فارسی (fa)" },
+    { value: "fi", label: "suomi (fi)" },
+    { value: "fil", label: "Filipino (fil)" },
+    { value: "gl", label: "Galician (gl)" },
+    { value: "gu", label: "ગુજરાતી (gu)" },
+    { value: "hr", label: "hrvatski (hr)" },
+    { value: "hu", label: "magyar (hu)" },
+    { value: "hy", label: "Armenian (hy)" },
+    { value: "id", label: "Indonesia (id)" },
+    { value: "is", label: "Icelandic (is)" },
+    { value: "it", label: "italiano (it)" },
+    { value: "iw", label: "עברית (iw)" },
+    { value: "ka", label: "Georgian (ka)" },
+    { value: "kk", label: "Kazakh (kk)" },
+    { value: "km", label: "Khmer (km)" },
+    { value: "kn", label: "ಕನ್ನಡ (kn)" },
+    { value: "ko", label: "한국어 (ko)" },
+    { value: "ky", label: "Kyrgyz (ky)" },
+    { value: "lo", label: "Lao (lo)" },
+    { value: "lt", label: "lietuvių (lt)" },
+    { value: "lv", label: "latviešu (lv)" },
+    { value: "mk", label: "Macedonian (mk)" },
+    { value: "ml", label: "മലയാളം (ml)" },
+    { value: "mn", label: "Mongolian (mn)" },
+    { value: "mr", label: "मराठी (mr)" },
+    { value: "ms", label: "Melayu (ms)" },
+    { value: "my", label: "Burmese (my)" },
+    { value: "ne", label: "Nepali (ne)" },
+    { value: "nl", label: "Nederlands (nl)" },
+    { value: "no", label: "norsk (no)" },
+    { value: "or", label: "Odia (or)" },
+    { value: "pa", label: "ਪੰਜਾਬੀ (pa)" },
+    { value: "pl", label: "polski (pl)" },
+    { value: "ro", label: "română (ro)" },
+    { value: "si", label: "Sinhala (si)" },
+    { value: "sk", label: "slovenčina (sk)" },
+    { value: "sl", label: "slovenščina (sl)" },
+    { value: "sq", label: "Albanian (sq)" },
+    { value: "sr", label: "српски (sr)" },
+    { value: "sv", label: "svenska (sv)" },
+    { value: "sw", label: "Kiswahili (sw)" },
+    { value: "ta", label: "தமிழ் (ta)" },
+    { value: "te", label: "తెలుగు (te)" },
+    { value: "th", label: "ไทย (th)" },
+    { value: "tr", label: "Türkçe (tr)" },
+    { value: "uk", label: "українська (uk)" },
+    { value: "ur", label: "اردو (ur)" },
+    { value: "uz", label: "o'zbek (uz)" },
+    { value: "zh-Hans", label: "简体中文 (zh-Hans)" },
+    { value: "zh-Hant", label: "繁體中文 (zh-Hant)" },
+    { value: "zh-CN", label: "中文（中国） (zh-CN)" },
+    { value: "zh-HK", label: "中文（香港） (zh-HK)" },
+    { value: "zh-TW", label: "中文（台灣） (zh-TW)" },
+    { value: "zu", label: "Zulu (zu)" }
+  ];
   function CobaltTab() {
     const [youtubeService2] = hooks.useState(() => new YouTubeService());
     const [cobaltService] = hooks.useState(
@@ -5069,12 +5226,16 @@ new Set()
     const [successfulVideoIds, setSuccessfulVideoIds] = hooks.useState(
 new Set()
     );
+    const [bulkDubLang, setBulkDubLang] = hooks.useState("");
     const [videosPerPage, setVideosPerPage] = hooks.useState(8);
     const [abortControllers, setAbortControllers] = hooks.useState({
       videos: null,
       shorts: null,
       live: null
     });
+    hooks.useEffect(() => {
+      setBulkDubLang(cobaltSettings.value.preferredDubLang);
+    }, [cobaltSettings.value.preferredDubLang]);
     const formatBytes = (bytes) => {
       if (bytes === 0) return "0 B";
       const k = 1024;
@@ -5086,29 +5247,9 @@ new Set()
     const loading = loadingCache[activeContentTab];
     const currentPage = currentPageCache[activeContentTab];
     const getAvailableQualities = () => {
-      const codec = cobaltSettings.value.videoCodec;
-      if (codec === "h264") {
-        return ["144", "240", "360", "480", "720", "1080"];
-      }
-      if (codec === "vp9") {
-        return ["144", "240", "360", "480", "720", "1080", "1440", "2160"];
-      }
-      if (codec === "av1") {
-        return [
-          "144",
-          "240",
-          "360",
-          "480",
-          "720",
-          "1080",
-          "1440",
-          "2160",
-          "4320"
-        ];
-      }
-      return ["144", "240", "360", "480", "720", "1080"];
+      return VIDEO_QUALITIES;
     };
-    const audioQualities = ["128", "256", "320"];
+    const audioQualities = AUDIO_BITRATES;
     const isChannelPage = () => {
       const path = window.location.pathname;
       return path.startsWith("/@") || path.startsWith("/channel/");
@@ -5539,26 +5680,29 @@ new Set()
         };
       }).filter((v) => v.videoId);
     };
-    const downloadVideo = async (videoId, title) => {
+    const downloadVideo = async (videoId, title, dubLang) => {
       setDownloadingIds((prev) => new Set(prev).add(videoId));
       try {
         const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
         const options2 = {
           url: videoUrl
         };
-        if (format === "video" && selectedDubLang) {
-          options2.youtubeDubLang = selectedDubLang;
+        const langToUse = dubLang !== void 0 ? dubLang : selectedDubLang;
+        if (cobaltSettings.value.debug) {
+          console.log(
+            "[Cobalt Debug] Dub Lang - dubLang:",
+            dubLang,
+            "selectedDubLang:",
+            selectedDubLang,
+            "langToUse:",
+            langToUse
+          );
+        }
+        if (format === "video" && langToUse && langToUse !== "") {
+          options2.youtubeDubLang = langToUse;
         }
         if (format === "video") {
-          if (quality !== "1080") {
-            options2.videoQuality = String(quality);
-          }
-          if (cobaltSettings.value.videoCodec !== "h264") {
-            options2.youtubeVideoCodec = cobaltSettings.value.videoCodec;
-          }
-          if (cobaltSettings.value.videoContainer !== "auto") {
-            options2.youtubeVideoContainer = cobaltSettings.value.videoContainer;
-          }
+          options2.videoQuality = String(quality);
         } else {
           options2.downloadMode = "audio";
           options2.audioFormat = "mp3";
@@ -5567,7 +5711,13 @@ new Set()
           }
         }
         options2.filenameStyle = cobaltSettings.value.filenameStyle;
+        if (cobaltSettings.value.debug) {
+          console.log("[Cobalt Debug] Request options:", options2);
+        }
         const response = await cobaltService.process(options2);
+        if (cobaltSettings.value.debug) {
+          console.log("[Cobalt Debug] API Response:", response);
+        }
         if (response.status === "error") {
           console.error("[Cobalt] Error details:", response.error);
           throw new Error(
@@ -5575,13 +5725,11 @@ new Set()
           );
         }
         if (response.status === "tunnel" || response.status === "redirect") {
-          const proxyUrl = `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(
-          response.url
-        )}`;
+          const finalUrl = response.url;
           await new Promise((resolve, reject) => {
             GM_xmlhttpRequest({
               method: "GET",
-              url: proxyUrl,
+              url: finalUrl,
               responseType: "blob",
               headers: {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
@@ -5666,7 +5814,7 @@ new Set()
           if (video) break;
         }
         if (video) {
-          await downloadVideo(videoId, video.title);
+          await downloadVideo(videoId, video.title, bulkDubLang);
           await new Promise((resolve) => setTimeout(resolve, 1e3));
         }
       }
@@ -5834,14 +5982,6 @@ new Set()
       currentVideoDuration,
       loadingVideoInfo
     ]);
-    hooks.useEffect(() => {
-      const availableQualities = getAvailableQualities();
-      if (!availableQualities.includes(quality)) {
-        const newQuality = availableQualities[availableQualities.length - 1] || "1080";
-        setQuality(newQuality);
-        storage.set("ddl-videoQuality", newQuality);
-      }
-    }, [cobaltSettings.value.videoCodec]);
     if (isWatchPage() && currentVideoId) {
       return u("div", { className: "space-y-4", children: [
         errorMessage && u("div", { role: "alert", className: "alert alert-error alert-soft", children: [
@@ -5859,7 +5999,7 @@ u(
                   storage.set("ddl-format", "video");
                 },
                 children: [
-u(IconVideo, { className: "size-[1.8em]" }),
+u(IconFileMp4, { className: "size-[1.8em]", size: 28 }),
 u("span", { className: "text-xl", children: "Video" })
                 ]
               }
@@ -5873,7 +6013,7 @@ u(
                   storage.set("ddl-format", "audio");
                 },
                 children: [
-u(IconMusic, { className: "size-[1.8em]" }),
+u(IconFileMp3, { className: "size-[1.8em]", size: 28 }),
 u("span", { className: "text-xl", children: "Audio" })
                 ]
               }
@@ -5911,7 +6051,10 @@ u("span", { className: "text-xl", children: "Audio" })
             }
           ),
           audioTracks.length > 0 && u("div", { className: "space-y-2", children: [
-u("label", { className: "text-xl font-medium block", children: "Dubbed Audio" }),
+u("label", { className: "text-xl font-medium flex items-center gap-2", children: [
+u(IconFileAudio, { className: "size-[1.2em]", size: 24 }),
+              "Dubbed Audio"
+            ] }),
 u(
               "select",
               {
@@ -5979,7 +6122,11 @@ u(
               "button",
               {
                 className: "btn btn-lg btn-primary flex-1",
-                onClick: () => downloadVideo(currentVideoId),
+                onClick: () => downloadVideo(
+                  currentVideoId,
+                  currentVideoTitle,
+                  selectedDubLang
+                ),
                 disabled: downloadingIds.has(currentVideoId),
                 children: downloadingIds.has(currentVideoId) ? u(preact.Fragment, { children: [
 u("span", { className: "loading loading-spinner loading-md" }),
@@ -6021,7 +6168,7 @@ u(
                 storage.set("ddl-format", "video");
               },
               children: [
-u(IconVideo, { className: "size-[1.8em]" }),
+u(IconFileMp4, { className: "size-[1.8em]", size: 28 }),
 u("span", { className: "text-xl", children: "Video" })
               ]
             }
@@ -6035,7 +6182,7 @@ u(
                 storage.set("ddl-format", "audio");
               },
               children: [
-u(IconMusic, { className: "size-[1.8em]" }),
+u(IconFileMp3, { className: "size-[1.8em]", size: 28 }),
 u("span", { className: "text-xl", children: "Audio" })
               ]
             }
@@ -6070,6 +6217,24 @@ u("span", { className: "text-xl", children: "Audio" })
               q2,
               " kbps"
             ] }, q2))
+          }
+        )
+      ] }),
+      format === "video" && u("div", { className: "bg-base-200 rounded-lg p-4", children: [
+u("label", { className: "text-xl font-medium flex items-center gap-2 mb-3", children: [
+u(IconFileAudio, { className: "size-[1.2em]", size: 24 }),
+          "Dubbed Audio"
+        ] }),
+u(
+          "select",
+          {
+            className: "select select-bordered select-lg w-full text-xl",
+            value: bulkDubLang,
+            onChange: (e) => {
+              const value = e.target.value;
+              setBulkDubLang(value);
+            },
+            children: DUB_LANGUAGE_OPTIONS.map((lang) => u("option", { value: lang.value, children: lang.label }, lang.value))
           }
         )
       ] }),
@@ -6314,7 +6479,11 @@ u(
                         "button",
                         {
                           className: "btn btn-square btn-primary",
-                          onClick: () => downloadVideo(video.videoId, video.title),
+                          onClick: () => downloadVideo(
+                            video.videoId,
+                            video.title,
+                            bulkDubLang
+                          ),
                           disabled: downloadingIds.has(video.videoId),
                           children: downloadingIds.has(video.videoId) ? u("span", { className: "loading loading-spinner loading-sm" }) : u(IconDownload, { className: "size-[1.8em]" })
                         }
@@ -6504,6 +6673,9 @@ u(
     const [bookmarkApplied, setBookmarkApplied] = hooks.useState(false);
     const [ddlApplied, setDdlApplied] = hooks.useState(false);
     const [loopVideo, setLoopVideo] = hooks.useState(moduleSettings.value.loopVideo);
+    const [returnDislike, setReturnDislike] = hooks.useState(
+      moduleSettings.value.returnDislike
+    );
     const [screenshotFormat, setScreenshotFormat] = hooks.useState(
       moduleSettings.value.screenshotFormat
     );
@@ -6528,18 +6700,13 @@ u(
     const [cobaltInstanceUrl, setCobaltInstanceUrl] = hooks.useState(
       cobaltSettings.value.instanceUrl
     );
-    const [cobaltVideoCodec, setCobaltVideoCodec] = hooks.useState(
-      cobaltSettings.value.videoCodec
-    );
-    const [cobaltVideoContainer, setCobaltVideoContainer] = hooks.useState(
-      cobaltSettings.value.videoContainer
-    );
     const [cobaltFilenameStyle, setCobaltFilenameStyle] = hooks.useState(
       cobaltSettings.value.filenameStyle
     );
     const [cobaltPreferredDubLang, setCobaltPreferredDubLang] = hooks.useState(
       cobaltSettings.value.preferredDubLang
     );
+    const [cobaltDebug, setCobaltDebug] = hooks.useState(cobaltSettings.value.debug);
     const [cobaltUrlApplied, setCobaltUrlApplied] = hooks.useState(false);
     hooks.useEffect(() => {
       loadSettings2();
@@ -6553,6 +6720,11 @@ u(
       setWidth(parseInt(savedWidth));
       const loopVideoSaved = await storage.get("module-loop-video", "true");
       setLoopVideo(loopVideoSaved === "true");
+      const returnDislikeSaved = await storage.get(
+        "module-return-dislike",
+        "true"
+      );
+      setReturnDislike(returnDislikeSaved === "true");
       const screenshotFormatSaved = await storage.get(
         "module-screenshot-format",
         "jpg"
@@ -6587,21 +6759,9 @@ u(
       setCobaltEnabled(cobaltEnabledSaved === "true");
       const cobaltInstanceUrlSaved = await storage.get(
         "cobalt-instance-url",
-        "https://cobalt.nichind.dev"
+        COBALT_DEFAULTS.INSTANCE_URL
       );
       setCobaltInstanceUrl(cobaltInstanceUrlSaved);
-      const cobaltVideoCodecSaved = await storage.get(
-        "cobalt-video-codec",
-        "h264"
-      );
-      setCobaltVideoCodec(cobaltVideoCodecSaved);
-      const cobaltVideoContainerSaved = await storage.get(
-        "cobalt-video-container",
-        "auto"
-      );
-      setCobaltVideoContainer(
-        cobaltVideoContainerSaved
-      );
       const cobaltFilenameStyleSaved = await storage.get(
         "cobalt-filename-style",
         "basic"
@@ -6614,6 +6774,8 @@ u(
         ""
       );
       setCobaltPreferredDubLang(cobaltPreferredDubLangSaved);
+      const cobaltDebugSaved = await storage.get("cobalt-debug", "false");
+      setCobaltDebug(cobaltDebugSaved === "true");
     };
     const handleBookmarkPerPageChange = async (value) => {
       setBookmarkPerPage(value);
@@ -6648,6 +6810,13 @@ u(
       setLoopVideo(enabled);
       await storage.set("module-loop-video", enabled.toString());
       moduleSettings.value = { ...moduleSettings.value, loopVideo: enabled };
+      window.dispatchEvent(new CustomEvent("module-settings-updated"));
+      playToggleSound();
+    };
+    const handleReturnDislikeToggle = async (enabled) => {
+      setReturnDislike(enabled);
+      await storage.set("module-return-dislike", enabled.toString());
+      moduleSettings.value = { ...moduleSettings.value, returnDislike: enabled };
       window.dispatchEvent(new CustomEvent("module-settings-updated"));
       playToggleSound();
     };
@@ -6730,35 +6899,6 @@ u(
       setTimeout(() => setCobaltUrlApplied(false), 500);
       window.dispatchEvent(new CustomEvent("settings-updated"));
     };
-    const handleCobaltVideoCodecChange = async (codec) => {
-      setCobaltVideoCodec(codec);
-      await storage.set("cobalt-video-codec", codec);
-      let newContainer = cobaltVideoContainer;
-      if (codec === "h264" && (cobaltVideoContainer === "webm" || cobaltVideoContainer === "mkv")) {
-        newContainer = "auto";
-        setCobaltVideoContainer("auto");
-        await storage.set("cobalt-video-container", "auto");
-      } else if ((codec === "vp9" || codec === "av1") && cobaltVideoContainer === "mp4") {
-        newContainer = "auto";
-        setCobaltVideoContainer("auto");
-        await storage.set("cobalt-video-container", "auto");
-      }
-      cobaltSettings.value = {
-        ...cobaltSettings.value,
-        videoCodec: codec,
-        videoContainer: newContainer
-      };
-      window.dispatchEvent(new CustomEvent("settings-updated"));
-    };
-    const handleCobaltVideoContainerChange = async (container) => {
-      setCobaltVideoContainer(container);
-      await storage.set("cobalt-video-container", container);
-      cobaltSettings.value = {
-        ...cobaltSettings.value,
-        videoContainer: container
-      };
-      window.dispatchEvent(new CustomEvent("settings-updated"));
-    };
     const handleCobaltFilenameStyleChange = async (style) => {
       setCobaltFilenameStyle(style);
       await storage.set("cobalt-filename-style", style);
@@ -6777,6 +6917,16 @@ u(
       };
       window.dispatchEvent(new CustomEvent("settings-updated"));
     };
+    const handleCobaltDebugToggle = async (checked) => {
+      setCobaltDebug(checked);
+      await storage.set("cobalt-debug", checked.toString());
+      cobaltSettings.value = {
+        ...cobaltSettings.value,
+        debug: checked
+      };
+      playToggleSound();
+      window.dispatchEvent(new CustomEvent("settings-updated"));
+    };
     const handleResetDefaults = async () => {
       await storage.set("bookmark-per-page", "8");
       await storage.set("ddl-per-page", "8");
@@ -6787,12 +6937,12 @@ u(
       await storage.set("ddl-videoQuality", "1080");
       await storage.set("ddl-audioBitrate", "320");
       await storage.set("cobalt-enabled", "false");
-      await storage.set("cobalt-instance-url", "https://cobalt.nichind.dev");
-      await storage.set("cobalt-video-codec", "h264");
-      await storage.set("cobalt-video-container", "auto");
-      await storage.set("cobalt-filename-style", "basic");
+      await storage.set("cobalt-instance-url", COBALT_DEFAULTS.INSTANCE_URL);
+      await storage.set("cobalt-filename-style", COBALT_DEFAULTS.FILENAME_STYLE);
       await storage.set("cobalt-preferred-dub-lang", "");
+      await storage.set("cobalt-debug", "false");
       await storage.set("module-loop-video", "true");
+      await storage.set("module-return-dislike", "true");
       await storage.set("module-screenshot-format", "jpg");
       await storage.set("module-screenshot-filename", "title");
       await storage.set("module-screenshot-download", "true");
@@ -6809,6 +6959,7 @@ u(
       }, void 0 );
       currentTheme2.value = "light";
       setLoopVideo(true);
+      setReturnDislike(true);
       setScreenshotFormat("jpg");
       setScreenshotFilename("title");
       setScreenshotDownload(true);
@@ -6817,6 +6968,7 @@ u(
       setHideProgressBar(false);
       moduleSettings.value = {
         loopVideo: true,
+        returnDislike: true,
         screenshotFormat: "jpg",
         screenshotFilename: "title",
         screenshotDownload: true,
@@ -6825,18 +6977,16 @@ u(
         hideProgressBar: false
       };
       setCobaltEnabled(false);
-      setCobaltInstanceUrl("https://cobalt.nichind.dev");
-      setCobaltVideoCodec("h264");
-      setCobaltVideoContainer("auto");
-      setCobaltFilenameStyle("basic");
+      setCobaltInstanceUrl(COBALT_DEFAULTS.INSTANCE_URL);
+      setCobaltFilenameStyle(COBALT_DEFAULTS.FILENAME_STYLE);
       setCobaltPreferredDubLang("");
+      setCobaltDebug(false);
       cobaltSettings.value = {
         enabled: false,
-        instanceUrl: "https://cobalt.nichind.dev",
-        videoCodec: "h264",
-        videoContainer: "auto",
-        filenameStyle: "basic",
-        preferredDubLang: ""
+        instanceUrl: COBALT_DEFAULTS.INSTANCE_URL,
+        filenameStyle: COBALT_DEFAULTS.FILENAME_STYLE,
+        preferredDubLang: "",
+        debug: false
       };
       window.dispatchEvent(new CustomEvent("settings-updated"));
       window.dispatchEvent(new CustomEvent("module-settings-updated"));
@@ -6850,7 +7000,10 @@ u("h3", { className: "text-xl font-semibold mb-4", children: "Appearance" }),
 u("div", { className: "space-y-4", children: [
 u(ThemeSelector, {}),
 u("div", { className: "bg-base-200 rounded-lg p-4", children: [
-u("label", { className: "text-xl font-medium mb-3 block", children: "Panel Width" }),
+u("label", { className: "text-xl font-medium mb-3 flex items-center gap-2", children: [
+              "Panel Width",
+u("div", { className: "tooltip", "data-tip": "Min: 300px, Max: 600px", children: u(IconInfoCircle, { size: 14 }) })
+            ] }),
 u("div", { className: "join w-full", children: [
 u(
                 "input",
@@ -6876,13 +7029,15 @@ u(
                   children: widthApplied ? u(IconCheck, { className: "size-[1.8em]" }) : "Apply"
                 }
               )
-            ] }),
-u("p", { className: "text-lg opacity-60 mt-2", children: "Min: 300px, Max: 600px" })
+            ] })
           ] })
         ] })
       ] }),
 u("div", { children: [
-u("h3", { className: "text-xl font-semibold mb-4", children: "Pagination" }),
+u("h3", { className: "text-xl font-semibold mb-4 flex items-center gap-2", children: [
+          "Items Per Page",
+u("div", { className: "tooltip", "data-tip": "Min: 5, Max: 50", children: u(IconInfoCircle, { size: 14 }) })
+        ] }),
 u("div", { className: "grid grid-cols-2 gap-4", children: [
 u("div", { className: "bg-base-200 rounded-lg p-4", children: [
 u("label", { className: "text-xl font-medium mb-3 block", children: "Bookmark" }),
@@ -6913,8 +7068,7 @@ u(
                   children: bookmarkApplied ? u(IconCheck, { className: "size-[1.8em]" }) : "Apply"
                 }
               )
-            ] }),
-u("p", { className: "text-lg opacity-60 mt-2", children: "Min: 5, Max: 50" })
+            ] })
           ] }),
 u("div", { className: "bg-base-200 rounded-lg p-4", children: [
 u("label", { className: "text-xl font-medium mb-3 block", children: [
@@ -6946,8 +7100,7 @@ u(
                   children: ddlApplied ? u(IconCheck, { className: "size-[1.8em]" }) : "Apply"
                 }
               )
-            ] }),
-u("p", { className: "text-lg opacity-60 mt-2", children: "Min: 5, Max: 50" })
+            ] })
           ] })
         ] })
       ] }),
@@ -6964,11 +7117,7 @@ u(
                 onChange: (e) => handleScreenshotFormatChange(
                   e.target.value
                 ),
-                children: [
-u("option", { value: "jpg", children: "JPG" }),
-u("option", { value: "png", children: "PNG" }),
-u("option", { value: "webp", children: "WebP" })
-                ]
+                children: SCREENSHOT_FORMATS.map((format) => u("option", { value: format.value, children: format.label }, format.value))
               }
             )
           ] }),
@@ -6982,10 +7131,7 @@ u(
                 onChange: (e) => handleScreenshotFilenameChange(
                   e.target.value
                 ),
-                children: [
-u("option", { value: "title", children: "Video Title" }),
-u("option", { value: "videoId", children: "Video ID" })
-                ]
+                children: SCREENSHOT_FILENAME_OPTIONS.map((option) => u("option", { value: option.value, children: option.label }, option.value))
               }
             )
           ] })
@@ -6994,6 +7140,32 @@ u("option", { value: "videoId", children: "Video ID" })
 u("div", { children: [
 u("h3", { className: "text-xl font-semibold mb-4", children: "Modules" }),
 u("div", { className: "space-y-4", children: [
+u("div", { className: "bg-base-200 rounded-lg p-4", children: u("div", { className: "flex items-center justify-between", children: [
+u("div", { className: "flex items-center gap-3", children: [
+u(
+                "svg",
+                {
+                  xmlns: "http://www.w3.org/2000/svg",
+                  viewBox: "0 0 20 20",
+                  fill: "currentColor",
+                  className: "w-6 h-6",
+                  children: u("path", { d: "M10.052 17.706c.34.977 1.632 1.427 2.43.59c.164-.17.326-.355.436-.519c.32-.48.455-1.113.504-1.73c.05-.628.016-1.302-.048-1.912a18.348 18.348 0 0 0-.241-1.583l-.01-.052h.883a3 3 0 0 0 2.952-3.537l-.684-3.762a4.5 4.5 0 0 0-5.612-3.536l-5.6 1.527A2.5 2.5 0 0 0 3.27 5.114l-.353 1.765c-.278 1.389.784 2.558 1.913 3.005c.323.127.614.289.84.49c1.707 1.513 2.325 2.723 3.385 4.849c.354.71.718 1.676.998 2.482Zm1.965-5.585v.002l.002.007l.007.031a14.204 14.204 0 0 1 .126.583c.076.39.167.92.227 1.496c.061.577.09 1.184.046 1.728c-.044.555-.16.985-.34 1.254c-.059.09-.171.222-.326.383c-.199.209-.628.16-.762-.227c-.283-.814-.664-1.83-1.048-2.601c-1.067-2.14-1.756-3.501-3.616-5.151a3.83 3.83 0 0 0-1.136-.672c-.88-.348-1.447-1.149-1.3-1.879l.352-1.765a1.5 1.5 0 0 1 1.077-1.153l5.6-1.527a3.5 3.5 0 0 1 4.364 2.75l.684 3.762a2 2 0 0 1-1.968 2.358h-1.505a.5.5 0 0 0-.484.621Z" })
+                }
+              ),
+u("label", { className: "text-xl", children: "Return Dislike" })
+            ] }),
+u(
+              "input",
+              {
+                type: "checkbox",
+                className: "toggle toggle-primary",
+                checked: returnDislike,
+                onChange: (e) => handleReturnDislikeToggle(
+                  e.target.checked
+                )
+              }
+            )
+          ] }) }),
 u("div", { className: "bg-base-200 rounded-lg p-4", children: u("div", { className: "flex items-center justify-between", children: [
 u("div", { className: "flex items-center gap-3", children: [
 u(
@@ -7117,7 +7289,25 @@ u(
             )
           ] }) }),
 u("div", { className: "bg-base-200 rounded-lg p-4", children: u("div", { className: "flex items-center justify-between", children: [
-u("label", { className: "text-xl", children: "Hide Resume Progress Bar" }),
+u("div", { className: "flex items-center gap-3", children: [
+u(
+                "svg",
+                {
+                  xmlns: "http://www.w3.org/2000/svg",
+                  viewBox: "0 0 20 20",
+                  fill: "currentColor",
+                  className: "w-6 h-6",
+                  children: u(
+                    "path",
+                    {
+                      fill: "currentColor",
+                      d: "M2.854 2.146a.5.5 0 1 0-.708.708l.739.738A2.495 2.495 0 0 0 2 5.5v9A2.5 2.5 0 0 0 4.5 17h11c.241 0 .474-.034.695-.098l.951.952a.5.5 0 0 0 .708-.708l-15-15ZM15.293 16H4.5A1.5 1.5 0 0 1 3 14.5v-9c0-.489.234-.923.596-1.197L8 8.707v3.943a.5.5 0 0 0 .776.417l2.156-1.428L15.292 16ZM9.918 7.797l2.716 2.716l.142-.095a.5.5 0 0 0-.01-.84l-2.848-1.78ZM17 14.5c0 .117-.013.23-.039.34l.777.776A2.49 2.49 0 0 0 18 14.5v-9A2.5 2.5 0 0 0 15.5 3H5.121l1 1H15.5A1.5 1.5 0 0 1 17 5.5v9Z"
+                    }
+                  )
+                }
+              ),
+u("label", { className: "text-xl", children: "Hide Resume Progress Bar" })
+            ] }),
 u(
               "input",
               {
@@ -7131,7 +7321,25 @@ u(
             )
           ] }) }),
 u("div", { className: "bg-base-200 rounded-lg p-4", children: u("div", { className: "flex items-center justify-between", children: [
-u("label", { className: "text-xl", children: "Cobalt Instances" }),
+u("div", { className: "flex items-center gap-3", children: [
+u(
+                "svg",
+                {
+                  xmlns: "http://www.w3.org/2000/svg",
+                  viewBox: "0 0 20 20",
+                  fill: "currentColor",
+                  className: "w-6 h-6",
+                  children: u(
+                    "path",
+                    {
+                      fill: "currentColor",
+                      d: "M8.646 4.147a.5.5 0 0 1 .707-.001l5.484 5.465a.55.55 0 0 1 0 .779l-5.484 5.465a.5.5 0 0 1-.706-.708L13.812 10L8.647 4.854a.5.5 0 0 1-.001-.707Zm-4 0a.5.5 0 0 1 .707-.001l5.484 5.465a.55.55 0 0 1 0 .779l-5.484 5.465a.5.5 0 0 1-.706-.708L9.812 10L4.647 4.854a.5.5 0 0 1-.001-.707Z"
+                    }
+                  )
+                }
+              ),
+u("label", { className: "text-xl", children: "Cobalt Instances" })
+            ] }),
 u(
               "input",
               {
@@ -7145,7 +7353,7 @@ u(
             )
           ] }) }),
           cobaltEnabled && u(preact.Fragment, { children: [
-u("div", { className: "bg-base-200 rounded-lg p-4", children: [
+u("div", { className: "bg-base rounded-lg px-4 pt-4", children: [
 u("label", { className: "text-xl font-medium mb-3 block", children: "Instance URL" }),
 u("div", { className: "join w-full", children: [
 u(
@@ -7160,7 +7368,7 @@ u(
                         handleCobaltInstanceUrlChange(cobaltInstanceUrl);
                       }
                     },
-                    placeholder: "https://cobalt.nichind.dev"
+                    placeholder: COBALT_DEFAULTS.INSTANCE_URL
                   }
                 ),
 u(
@@ -7173,47 +7381,7 @@ u(
                 )
               ] })
             ] }),
-u("div", { className: "bg-base-200 rounded-lg p-4", children: [
-u("label", { className: "text-xl font-medium block mb-3", children: "Video Codec" }),
-u(
-                "select",
-                {
-                  className: "select select-bordered w-full text-xl",
-                  value: cobaltVideoCodec,
-                  onChange: (e) => handleCobaltVideoCodecChange(
-                    e.target.value
-                  ),
-                  children: [
-u("option", { value: "h264", children: "H.264" }),
-u("option", { value: "av1", children: "AV1" }),
-u("option", { value: "vp9", children: "VP9" })
-                  ]
-                }
-              )
-            ] }),
-u("div", { className: "bg-base-200 rounded-lg p-4", children: [
-u("label", { className: "text-xl font-medium block mb-3", children: "Video Container" }),
-u(
-                "select",
-                {
-                  className: "select select-bordered w-full text-xl",
-                  value: cobaltVideoContainer,
-                  onChange: (e) => handleCobaltVideoContainerChange(
-                    e.target.value
-                  ),
-                  children: cobaltVideoCodec === "h264" ? u(preact.Fragment, { children: [
-u("option", { value: "auto", children: "Auto (MP4)" }),
-u("option", { value: "mp4", children: "MP4" })
-                  ] }) : u(preact.Fragment, { children: [
-u("option", { value: "auto", children: "Auto (WebM)" }),
-u("option", { value: "webm", children: "WebM" }),
-u("option", { value: "mkv", children: "MKV" })
-                  ] })
-                }
-              ),
-              (cobaltVideoCodec === "vp9" || cobaltVideoCodec === "av1") && u("p", { className: "text-lg opacity-60 mt-2", children: "VP9/AV1 work best with WebM" })
-            ] }),
-u("div", { className: "bg-base-200 rounded-lg p-4", children: [
+u("div", { className: "bg-base rounded-lg px-4 pt-4", children: [
 u("label", { className: "text-xl font-medium block mb-3", children: "Filename Style" }),
 u(
                 "select",
@@ -7223,16 +7391,11 @@ u(
                   onChange: (e) => handleCobaltFilenameStyleChange(
                     e.target.value
                   ),
-                  children: [
-u("option", { value: "classic", children: "Classic" }),
-u("option", { value: "pretty", children: "Pretty" }),
-u("option", { value: "basic", children: "Basic" }),
-u("option", { value: "nerdy", children: "Nerdy" })
-                  ]
+                  children: FILENAME_STYLES.map((style) => u("option", { value: style.value, children: style.label }, style.value))
                 }
               )
             ] }),
-u("div", { className: "bg-base-200 rounded-lg p-4", children: [
+u("div", { className: "bg-base rounded-lg px-4 pt-4", children: [
 u("label", { className: "text-xl font-medium block mb-3", children: "Preferred Dub Language" }),
 u(
                 "select",
@@ -7242,91 +7405,24 @@ u(
                   onChange: (e) => handleCobaltPreferredDubLangChange(
                     e.target.value
                   ),
-                  children: [
-u("option", { value: "", children: "Original Audio" }),
-u("option", { value: "en", children: "English (en)" }),
-u("option", { value: "es", children: "español (es)" }),
-u("option", { value: "pt", children: "português (pt)" }),
-u("option", { value: "fr", children: "français (fr)" }),
-u("option", { value: "ru", children: "русский (ru)" }),
-u("option", { value: "zh", children: "中文 (zh)" }),
-u("option", { value: "vi", children: "Tiếng Việt (vi)" }),
-u("option", { value: "hi", children: "हिन्दी (hi)" }),
-u("option", { value: "bn", children: "বাংলা (bn)" }),
-u("option", { value: "ja", children: "日本語 (ja)" }),
-u("option", { value: "af", children: "Afrikaans (af)" }),
-u("option", { value: "am", children: "አማርኛ (am)" }),
-u("option", { value: "ar", children: "العربية (ar)" }),
-u("option", { value: "as", children: "Assamese (as)" }),
-u("option", { value: "az", children: "azərbaycan (az)" }),
-u("option", { value: "be", children: "Belarusian (be)" }),
-u("option", { value: "bg", children: "български (bg)" }),
-u("option", { value: "bs", children: "bosanski (bs)" }),
-u("option", { value: "ca", children: "català (ca)" }),
-u("option", { value: "cs", children: "čeština (cs)" }),
-u("option", { value: "da", children: "dansk (da)" }),
-u("option", { value: "de", children: "Deutsch (de)" }),
-u("option", { value: "el", children: "Ελληνικά (el)" }),
-u("option", { value: "et", children: "eesti (et)" }),
-u("option", { value: "eu", children: "Basque (eu)" }),
-u("option", { value: "fa", children: "فارسی (fa)" }),
-u("option", { value: "fi", children: "suomi (fi)" }),
-u("option", { value: "fil", children: "Filipino (fil)" }),
-u("option", { value: "gl", children: "Galician (gl)" }),
-u("option", { value: "gu", children: "ગુજરાતી (gu)" }),
-u("option", { value: "hr", children: "hrvatski (hr)" }),
-u("option", { value: "hu", children: "magyar (hu)" }),
-u("option", { value: "hy", children: "Armenian (hy)" }),
-u("option", { value: "id", children: "Indonesia (id)" }),
-u("option", { value: "is", children: "Icelandic (is)" }),
-u("option", { value: "it", children: "italiano (it)" }),
-u("option", { value: "iw", children: "עברית (iw)" }),
-u("option", { value: "ka", children: "Georgian (ka)" }),
-u("option", { value: "kk", children: "Kazakh (kk)" }),
-u("option", { value: "km", children: "Khmer (km)" }),
-u("option", { value: "kn", children: "ಕನ್ನಡ (kn)" }),
-u("option", { value: "ko", children: "한국어 (ko)" }),
-u("option", { value: "ky", children: "Kyrgyz (ky)" }),
-u("option", { value: "lo", children: "Lao (lo)" }),
-u("option", { value: "lt", children: "lietuvių (lt)" }),
-u("option", { value: "lv", children: "latviešu (lv)" }),
-u("option", { value: "mk", children: "Macedonian (mk)" }),
-u("option", { value: "ml", children: "മലയാളം (ml)" }),
-u("option", { value: "mn", children: "Mongolian (mn)" }),
-u("option", { value: "mr", children: "मराठी (mr)" }),
-u("option", { value: "ms", children: "Melayu (ms)" }),
-u("option", { value: "my", children: "Burmese (my)" }),
-u("option", { value: "ne", children: "Nepali (ne)" }),
-u("option", { value: "nl", children: "Nederlands (nl)" }),
-u("option", { value: "no", children: "norsk (no)" }),
-u("option", { value: "or", children: "Odia (or)" }),
-u("option", { value: "pa", children: "ਪੰਜਾਬੀ (pa)" }),
-u("option", { value: "pl", children: "polski (pl)" }),
-u("option", { value: "ro", children: "română (ro)" }),
-u("option", { value: "si", children: "Sinhala (si)" }),
-u("option", { value: "sk", children: "slovenčina (sk)" }),
-u("option", { value: "sl", children: "slovenščina (sl)" }),
-u("option", { value: "sq", children: "Albanian (sq)" }),
-u("option", { value: "sr", children: "српски (sr)" }),
-u("option", { value: "sv", children: "svenska (sv)" }),
-u("option", { value: "sw", children: "Kiswahili (sw)" }),
-u("option", { value: "ta", children: "தமிழ் (ta)" }),
-u("option", { value: "te", children: "తెలుగు (te)" }),
-u("option", { value: "th", children: "ไทย (th)" }),
-u("option", { value: "tr", children: "Türkçe (tr)" }),
-u("option", { value: "uk", children: "українська (uk)" }),
-u("option", { value: "ur", children: "اردو (ur)" }),
-u("option", { value: "uz", children: "o'zbek (uz)" }),
-u("option", { value: "zh-Hans", children: "简体中文 (zh-Hans)" }),
-u("option", { value: "zh-Hant", children: "繁體中文 (zh-Hant)" }),
-u("option", { value: "zh-CN", children: "中文（中国） (zh-CN)" }),
-u("option", { value: "zh-HK", children: "中文（香港） (zh-HK)" }),
-u("option", { value: "zh-TW", children: "中文（台灣） (zh-TW)" }),
-u("option", { value: "zu", children: "Zulu (zu)" })
-                  ]
+                  children: DUB_LANGUAGE_OPTIONS.map((lang) => u("option", { value: lang.value, children: lang.label }, lang.value))
                 }
               )
-            ] })
+            ] }),
+u("div", { className: "bg-base rounded-lg px-4 pt-4", children: u("div", { className: "flex items-center justify-between", children: [
+u("label", { className: "text-xl font-medium block", children: "Debug Mode" }),
+u(
+                "input",
+                {
+                  type: "checkbox",
+                  className: "toggle toggle-primary",
+                  checked: cobaltDebug,
+                  onChange: (e) => handleCobaltDebugToggle(
+                    e.target.checked
+                  )
+                }
+              )
+            ] }) })
           ] })
         ] })
       ] }),
@@ -7427,7 +7523,7 @@ u("span", { children: "Report an Issue" })
       ] })
     ] });
   }
-  const version = "1.0.4";
+  const version = "1.0.5";
   const pkg = {
     version
   };
@@ -8794,7 +8890,7 @@ u(SubtitleDialog, {})
       check();
     });
   }
-  const CSS$3 = `
+  const CSS$4 = `
   a.tubeinsights-loop-button {
       display: flex !important;
       align-items: center !important;
@@ -8866,6 +8962,153 @@ u(SubtitleDialog, {})
     },
     cleanup() {
       document.querySelector(".tubeinsights-loop-button")?.remove();
+    }
+  };
+  const CSS$3 = ``;
+  let dislikesValue = 0;
+  let observer = null;
+  function getButtons() {
+    return document.querySelector(
+      "ytd-menu-renderer.ytd-watch-metadata > div#top-level-buttons-computed"
+    ) || document.querySelector(
+      "ytd-menu-renderer.ytd-video-primary-info-renderer > div"
+    ) || document.querySelector("#menu-container #top-level-buttons-computed");
+  }
+  function getDislikeButton() {
+    const buttons = getButtons();
+    if (!buttons) return null;
+    const segmentedContainer = buttons.querySelector(
+      "ytd-segmented-like-dislike-button-renderer"
+    );
+    if (segmentedContainer) {
+      return document.querySelector("#segmented-dislike-button") || segmentedContainer.children[1] || null;
+    }
+    const dislikeViewModel = buttons.querySelector("dislike-button-view-model");
+    if (dislikeViewModel) return dislikeViewModel;
+    return buttons.children[1] || null;
+  }
+  function getDislikeTextContainer() {
+    const dislikeButton = getDislikeButton();
+    if (!dislikeButton) return null;
+    let result = dislikeButton.querySelector("#text") || dislikeButton.querySelector("yt-formatted-string") || dislikeButton.querySelector("span[role='text']");
+    if (!result) {
+      const textSpan = document.createElement("span");
+      textSpan.id = "text";
+      textSpan.className = "yt-core-attributed-string yt-core-attributed-string--white-space-no-wrap";
+      textSpan.setAttribute("role", "text");
+      textSpan.style.marginLeft = "6px";
+      const button = dislikeButton.querySelector("button");
+      if (button) {
+        button.appendChild(textSpan);
+        button.style.width = "auto";
+        button.style.minWidth = "auto";
+      }
+      result = textSpan;
+    }
+    return result;
+  }
+  function setDislikes(dislikesCount) {
+    const container = getDislikeTextContainer();
+    if (container) {
+      container.removeAttribute("is-empty");
+      if (container.innerText !== dislikesCount) {
+        container.innerText = dislikesCount;
+      }
+    }
+  }
+  function getVideoId() {
+    const urlObject = new URL(window.location.href);
+    const pathname = urlObject.pathname;
+    if (pathname.startsWith("/clip")) {
+      const meta = document.querySelector("meta[itemprop='videoId']") || document.querySelector("meta[itemprop='identifier']");
+      return meta ? meta.content : null;
+    } else if (pathname.startsWith("/shorts")) {
+      return pathname.slice(8);
+    }
+    return urlObject.searchParams.get("v");
+  }
+  function roundDown(num) {
+    if (num < 1e3) return num;
+    const int = Math.floor(Math.log10(num) - 2);
+    const decimal = int + (int % 3 ? 1 : 0);
+    const value = Math.floor(num / 10 ** decimal);
+    return value * 10 ** decimal;
+  }
+  function numberFormat(numberState) {
+    const numberDisplay = roundDown(numberState);
+    let userLocales = "en";
+    if (document.documentElement.lang) {
+      userLocales = document.documentElement.lang;
+    } else if (navigator.language) {
+      userLocales = navigator.language;
+    }
+    const formatter = Intl.NumberFormat(userLocales, {
+      notation: "compact",
+      compactDisplay: "short"
+    });
+    return formatter.format(numberDisplay);
+  }
+  async function fetchDislikes() {
+    const videoId = getVideoId();
+    if (!videoId) return;
+    try {
+      const response = await fetch(
+        `https://returnyoutubedislikeapi.com/votes?videoId=${videoId}`
+      );
+      const json = await response.json();
+      if (json && json.dislikes !== void 0) {
+        dislikesValue = json.dislikes;
+        setDislikes(numberFormat(dislikesValue));
+      }
+    } catch (error) {
+      console.error("[Return Dislike] Failed to fetch dislikes:", error);
+    }
+  }
+  function updateDislikes() {
+    setDislikes(numberFormat(dislikesValue));
+  }
+  function setupDislikeObserver() {
+    const dislikeButton = getDislikeButton();
+    if (!dislikeButton || observer) return;
+    observer = new MutationObserver(() => {
+      updateDislikes();
+    });
+    observer.observe(dislikeButton, {
+      attributes: true,
+      subtree: true,
+      childList: true
+    });
+  }
+  const returnDislikeModule = {
+    async init() {
+      if (!moduleSettings.value.returnDislike) return;
+      let attempts = 0;
+      const checkButton = setInterval(() => {
+        const buttons = getButtons();
+        const dislikeButton = getDislikeButton();
+        if (buttons && dislikeButton || attempts++ >= 50) {
+          clearInterval(checkButton);
+          if (buttons && dislikeButton) {
+            fetchDislikes();
+            setupDislikeObserver();
+          }
+        }
+      }, 50);
+    },
+    cleanup() {
+      if (observer) {
+        observer.disconnect();
+        observer = null;
+      }
+      dislikesValue = 0;
+      const textSpans = document.querySelectorAll(
+        "dislike-button-view-model #text, #segmented-dislike-button #text"
+      );
+      textSpans.forEach((span) => {
+        if (span.id === "text" && !span.hasAttribute("is-empty")) {
+          span.remove();
+        }
+      });
     }
   };
   const youtubeService$1 = new YouTubeService();
@@ -9468,6 +9711,7 @@ u(SubtitleDialog, {})
     document.addEventListener("keydown", handleKeyboardShortcut);
   }
   const ALL_CSS = `
+${CSS$4}
 ${CSS$3}
 ${CSS$2}
 ${CSS$1}
@@ -9475,6 +9719,7 @@ ${CSS}
 `;
   function initializeFeatures() {
     loopVideoModule.init();
+    returnDislikeModule.init();
     screenshotVideoModule.init();
     thumbnailDownloadModule.init();
     hideProgressBarModule.updateProgressBarVisibility();
@@ -9495,6 +9740,7 @@ ${CSS}
   }
   function handleModuleSettingsUpdate() {
     loopVideoModule.cleanup();
+    returnDislikeModule.cleanup();
     screenshotVideoModule.cleanup();
     thumbnailDownloadModule.cleanup();
     screenshotShortsModule.cleanup();
@@ -9521,6 +9767,7 @@ ${CSS}
     );
     window.addEventListener("yt-navigate-finish", () => {
       loopVideoModule.cleanup();
+      returnDislikeModule.cleanup();
       screenshotVideoModule.cleanup();
       thumbnailDownloadModule.cleanup();
       screenshotShortsModule.cleanup();
