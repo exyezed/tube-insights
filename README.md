@@ -14,19 +14,29 @@ A feature-rich and high-performance YouTube userscript, built on the InnerTube A
 
 ### Insights
 
-![image](https://github.com/user-attachments/assets/67e6dee7-fd15-49a2-8e94-90fe02aabebf)
+> Channel
+
+![image](https://github.com/user-attachments/assets/b86bde76-9914-418f-adeb-0068c7bf336f)
+
+> Video
+
+![image](https://github.com/user-attachments/assets/7fe4ea42-558e-4e82-b9b0-5770b92643bc)
+
+> Shorts
+
+![image](https://github.com/user-attachments/assets/4064fd81-04a0-4b08-a042-48218e9ec071)
 
 ### Live Count
 
-![image](https://github.com/user-attachments/assets/2ff05bf9-af45-42ca-8189-44a876aca21d)
+![image](https://github.com/user-attachments/assets/7b54cdf0-6662-4526-87ff-eb6bb4811ae9)
 
 ### Bookmark
 
-![image](https://github.com/user-attachments/assets/b4ba1fd3-ff79-46c6-b3a0-516aec6b3564)
+![image](https://github.com/user-attachments/assets/181eae90-417d-441b-9999-9bade859996d)
 
 ### DDL
 
-![image](https://github.com/user-attachments/assets/b4eb7641-76dd-4018-99e1-65461d245b9c)
+![image](https://github.com/user-attachments/assets/f5ee3016-b837-4ef4-934d-10ef598f6dd2)
 
 ### Video Player Modules
 
