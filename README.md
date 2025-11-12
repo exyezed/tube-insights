@@ -1,6 +1,6 @@
 [![GitHub All Releases](https://img.shields.io/github/downloads/exyezed/tube-insights/total?style=for-the-badge)](https://github.com/exyezed/tube-insights/releases)
 
-![image](https://github.com/user-attachments/assets/09f5afa0-924b-4146-b2e4-880b61c0091e)
+![image](https://github.com/user-attachments/assets/1a665475-7bbd-4d82-a94b-596df1eebcf2)
 
 A feature-rich and high-performance YouTube userscript, built on the InnerTube API — delivering advanced analytics, live stats, smart bookmarking, and seamless video/audio downloading without leaving YouTube.
 
