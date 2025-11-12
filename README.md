@@ -18,4 +18,4 @@ A feature-rich and high-performance YouTube userscript, built on the InnerTube A
 
 ### Video Player Modules
 
-![image](https://github.com/user-attachments/assets/c1d2c365-a4e7-45dd-b8d8-98037eebca86)
+![image](https://github.com/user-attachments/assets/455e69b0-35fe-4f91-ba4e-a389ea481c13)
